@@ -31,33 +31,31 @@ def main(config_file=None):
         percentages = [i /total_iterations   * config['training_params']['num_epochs'] for i in range(total_iterations)]
         return percentages
     
-    colormap = {'sgd' : '#B3CBB9',
+    colormap = {'sgd-m' : '#B3CBB9',
                 'sgd-sch': '#B3CBB9',
                 'adam': '#FF6B35',
                 'adam-sch' : '#FF6B35',
-                'iam' : '#61ACE5',
-                'iam-adam': '#00518F',
+                'momo' : '#61ACE5',
+                'momo-adam': '#00518F',
                 'teacher' : 'k',
     }
-    linestylemap =  {'iam' : None,
-                     'sgd' : None,
+    linestylemap =  {'momo' : None,
+                     'sgd-m' : None,
                      'sgd-sch': '--',
                      'teacher' : '--',  
-                     'iam-adam': None,
+                     'momo-adam': None,
                      'adam': None,
                      'adam-sch' : '--'
     }
-    markermap =  {'iam' : None, 'sgd' : None, 'sgd-sch': None, 'teacher' : None,  "iam-adam": None, 'adam': None, 'adam-sch' : None}
+    markermap =  {'momo' : None, 'sgd-m' : None, 'sgd-sch': None, 'teacher' : None,  "momo-adam": None, 'adam': None, 'adam-sch' : None}
     
     # Plot loss
     fig, ax = plt.subplots(figsize=(4, 3))
     for output in outputs:
-        if 'iams' in output['name']:
-            output['name'] = output['name'].replace('iams', 'iam')
         name  = output['name'].split('-lr-')[0]  
-        if output['name'] == 'iam':
+        if output['name'] == 'momo':
             # plot hline with average teacher loss
-            ax.hlines(np.mean(output['teacher_losses']),
+            ax.hlines(output['lb'],
                      0, 1,
                      label='teacher',
                      color="black",
@@ -72,7 +70,7 @@ def main(config_file=None):
                 linestyle=linestylemap[name],
                 markersize=10,
                 alpha=0.95,
-                zorder= 3 if 'iam' in output['name'] else 1
+                zorder= 3 if 'momo' in output['name'] else 1
         )
     ax.legend(loc='upper right', fontsize=10)
     ax.set_xlabel('Epoch')
@@ -90,7 +88,7 @@ def main(config_file=None):
     #ax.yaxis.get_major_formatter().set_powerlimits((-1, 1))
     
     # Plot learning rates
-    for method_subset in [['sgd', 'sgd-sch', 'iam'], ['adam', 'adam-sch', 'iam-adam']]:
+    for method_subset in [['sgd-m', 'sgd-sch', 'momo'], ['adam', 'adam-sch', 'momo-adam']]:
         fig, ax = plt.subplots(figsize=(4, 3))
         for output in outputs:
             name  = output['name'].split('-lr-')[0]
@@ -121,7 +119,7 @@ def main(config_file=None):
                             bottom=0.03,
                             left=0.155,
                             right=0.99)
-        name = 'figures/lr-' if 'sgd' in method_subset else 'figures/lr-adam-'
+        name = 'figures/lr-' if 'sgd-m' in method_subset else 'figures/lr-adam-'
         fig.savefig(name + config['name'] + '.pdf', format='pdf', bbox_inches='tight')
     
     # Plot legend

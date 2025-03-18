@@ -5,8 +5,6 @@ from typing import Tuple
 from transformers import get_cosine_schedule_with_warmup
 from .momo import Momo
 from .momo_adam import MomoAdam
-from .iam import IAM
-from .iams_adam import IAMSAdam
 # from .sps import SPS
 # from .adabound import AdaBoundW
 # from .adabelief import AdaBelief
@@ -15,7 +13,6 @@ from .iams_adam import IAMSAdam
 def get_optimizer(opt_config: dict, lr = 1e-3) -> Tuple[torch.optim.Optimizer, dict]:
     """
     Main function mapping opt configs to an instance of torch.optim.Optimizer and a dict of hyperparameter arguments (lr, weight_decay,..).  
-    
     For all hyperparameters which are not specified, we use PyTorch default.
     """
     
@@ -113,16 +110,16 @@ def get_optimizer(opt_config: dict, lr = 1e-3) -> Tuple[torch.optim.Optimizer, d
                   'use_fstar': True
                   }
 
-    elif name == 'iam':
-        opt_obj = IAM
-        hyperp = {'lr': lr,
-                  'weight_decay': opt_config.get('weight_decay', 0),
-                  'betas': opt_config.get('betas', (0.9, 0.999)),
-                  'eps': opt_config.get('eps', 1e-8),
-                  'lb': opt_config.get('lb', 0.),
-                  'divide': opt_config.get('divide', True),
-                  'use_fstar': True
-                  }          
+    # elif name == 'iam':
+    #     opt_obj = IAM
+    #     hyperp = {'lr': lr,
+    #               'weight_decay': opt_config.get('weight_decay', 0),
+    #               'betas': opt_config.get('betas', (0.9, 0.999)),
+    #               'eps': opt_config.get('eps', 1e-8),
+    #               'lb': opt_config.get('lb', 0.),
+    #               'divide': opt_config.get('divide', True),
+    #               'use_fstar': True
+    #               }          
     # elif name == 'prox-sps':
     #     opt_obj = SPS
     #     hyperp = {'lr': lr,

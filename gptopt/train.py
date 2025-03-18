@@ -3,7 +3,7 @@ import torch
 from torch.optim.lr_scheduler import LambdaLR, CosineAnnealingLR
 
 
-def train(tokenizer, train_dataloader, model,  optimizer, training_params,  device = "cuda", scheduler=None):
+def train(tokenizer, train_dataloader, model,  optimizer, training_params,  device = "cuda", scheduler=None, pass_loss=False):
     losses = [];  learning_rates = []
     for epoch in range(training_params['num_epochs']):
         model.train() 
@@ -18,10 +18,13 @@ def train(tokenizer, train_dataloader, model,  optimizer, training_params,  devi
             outputs  = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
             loss     = outputs.loss  # Cross-entropy loss is computed internally when labels are provided
             losses.append(loss.item())
-            
+            # Optimization step
             optimizer.zero_grad()
             loss.backward()
-            optimizer.step()
+            if pass_loss:
+                optimizer.step(closure = None, loss=loss)
+            else:
+                optimizer.step()
             if scheduler is not None:
                 scheduler.step()
             for param_group in optimizer.param_groups:

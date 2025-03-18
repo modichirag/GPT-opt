@@ -3,7 +3,6 @@ import argparse
 import torch
 from torch.utils.data import DataLoader
 from transformers import GPT2Tokenizer, GPT2LMHeadModel, GPT2Config, AutoTokenizer, AutoModelForCausalLM
-
 from datasets import load_dataset, Dataset
 import matplotlib.pyplot as plt
 from gptopt.utils import compute_cross_entropy_loss, get_default_config, merge_configs, load_config, get_outputfile_from_configfile
@@ -13,8 +12,6 @@ from gptopt.optim.utils import get_scheduler, get_optimizer
 from gptopt.utils import set_seed
 import copy 
 import json
-
-
 
 def main(config_file=None):
     set_seed(42)
@@ -28,7 +25,6 @@ def main(config_file=None):
     # Load model using "model_name"
     if 'model_name' in config['gpt_model']:
         model = AutoModelForCausalLM.from_pretrained(config['gpt_model']['model_name'], device_map="auto").to(device)
-        # model = GPT2LMHeadModel.from_pretrained(config['gpt_model']['model_name']).to(device)
     else:
         gpt_config = config['gpt_model']
         model_config = GPT2Config(
@@ -46,34 +42,21 @@ def main(config_file=None):
     print(f"Training on dataset {config['dataset']['name']}")
     # Access the optimizer parameters
     list_optimizer_params = config["optimizer_params"]
-
-    import pdb; pdb.set_trace()
     outputs = []
     for optimizer_config in list_optimizer_params:
-        # print(f"Optimizer: {optimizer['name']}")
-        # print(f"Learning Rates: {optimizer['lr']}")
-        # print(f"Weight Decay: {optimizer.get('weight_decay', 0)}")  # Use .get() for optional keys
-        # print(f"LR Schedule: {optimizer['lr_schedule']}") 
         for lr in optimizer_config['lr']:
+            print(f"Training with optimizer {optimizer_config['name']} and learning rate {lr}")
             model_copy = copy.deepcopy(model).to(device)  # The model remains the same
             total_iterations = training_params['num_epochs'] * len(train_dataloader)
             optimizer_obj, hyperp = get_optimizer(optimizer_config, lr = lr)
             optimizer = optimizer_obj(params=model_copy.parameters(), **hyperp)
             scheduler = get_scheduler(optimizer_config, optimizer, total_iterations = total_iterations)
-            output = train(tokenizer, train_dataloader, model_copy, optimizer, training_params, device=device, scheduler=scheduler)
+            if 'momo' in optimizer_config['name']:
+                output = train(tokenizer, train_dataloader, model_copy, optimizer, training_params, device=device, scheduler=scheduler, pass_loss=True)
+            else:
+                output = train(tokenizer, train_dataloader, model_copy, optimizer, training_params, device=device, scheduler=scheduler)
             output['name'] = optimizer_config['name'] + '-lr-'+str(lr)
             outputs.append(output)
-
-    # adam_lr = float(config['optimizer_params']['adam_learning_rate'])  # Adjust the key if necessary
-    # model_copy = copy.deepcopy(model).to(device)  # The model remains the same
-    # adam_optimizer = torch.optim.Adam(model_copy.parameters(), lr=adam_lr)  # Replace SGD with Adam
-    # adam_output = train(tokenizer, train_dataloader, model_copy, adam_optimizer, training_params, device=device)
-    # sgd_output['name'] = 'sgd'
-    # sgd_sch_output['name'] = 'sgd-sch' 
-    # adam_output['name'] = 'adam'
-    # adam_sch_output['name'] = 'adam-sch' 
-
-    # outputs = [sgd_output, sgd_sch_output, adam_output, adam_sch_output ]
 
     outputfile = get_outputfile_from_configfile(config_file) 
     with open(outputfile, 'w') as file: json.dump(outputs, file)

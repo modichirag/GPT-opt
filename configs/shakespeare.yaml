@@ -1,6 +1,6 @@
 # config.yaml
 
-name: "tiny_shakespeare_small"
+name: "tiny_shakespeare"
 
 optimizer_params:
   - name: adam
@@ -8,18 +8,19 @@ optimizer_params:
     weight_decay: 0
     lr_schedule: constant
 
-  # - name: momo-adam
-  #   lr: [0.1]
-  #   weight_decay: 0
-  #   lr_schedule: constant
+  - name: momo-adam
+    lr: [0.0005]
+    weight_decay: 0
+    lb: 2.0
+    lr_schedule: constant
 
-  # - name: sgd-m
-  #   lr: [0.001,  0.1, 1]
-  #   weight_decay: 0
-  #   momentum: 0.9
-  #   dampening: 0.9
-  #   lr_schedule: warm-up-cosine
-  #   warm_up_percent: 0.2
+  - name: sgd-m
+    lr: [0.00001,  0.0001]
+    weight_decay: 0
+    momentum: 0.9
+    dampening: 0.9
+    lr_schedule: warm-up-cosine
+    warm_up_percent: 0.2
 
 training_params:
   batch_size: 8
@@ -32,7 +33,7 @@ gpt_model:
   n_layer: 2    # Number of layers in distilgpt2
   n_head: 4    # Number of attention heads in distilgpt2
   vocab_size: 50304
-  tokenizer_name: "gpt2-large"
+  tokenizer_name: "gpt2-medium"
 
 dataset:
   name: "tiny_shakespeare"  
