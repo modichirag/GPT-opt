@@ -3,6 +3,15 @@ import torch
 import random
 import yaml
 
+def set_seed(seed):
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    torch.cuda.manual_seed(seed)
+    torch.cuda.manual_seed_all(seed)  # if you are using multi-GPU
+    torch.backends.cudnn.deterministic = True
+    torch.backends.cudnn.benchmark = False  # May slow down training but ensures reproducibility
+
 def compute_cross_entropy_loss(model, input_ids, attention_mask, labels):
     # Get model outputs
     outputs = model(input_ids=input_ids, attention_mask=attention_mask)
@@ -12,7 +21,7 @@ def compute_cross_entropy_loss(model, input_ids, attention_mask, labels):
     shift_labels = labels[:, 1:].contiguous()      # Remove the first token in the labels
     
     # Flatten the logits and labels for cross-entropy loss
-    loss_fct = torch.nn.CrossEntropyLoss(ignore_index=-100)  # Ignore padding token (assumes -100 for padding)
+    loss_fct = torch.nn.CrossEntropyLoss(ignore_index=-666)  # Ignore padding token (assumes -666 for padding)
     loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
     
     return loss
@@ -22,27 +31,42 @@ def get_outputfile_from_configfile(config_file):
 
 def get_default_config():
     default_config = {
-        'optimizer_params': {
-            'aimsadam_learning_rate': 9.0,
-            'adam_learning_rate': 1e-4,
-            'sgd_learning_rate': 1e-4,
-            'iams_learning_rate': 9.0
+        "optimizer_params": [
+        {
+            "name": "adam",
+            "lr": [ 0.0001],
+            "weight_decay": 0,
+            "lr_schedule": "constant"
         },
-        'training_params': {
-            'batch_size': 8,
-            'num_epochs': 1,
-            'max_length': 512,
-            'warm_up_percent': 0.1,
-            'warm_up_peak_mult': 3.0,
-            'adam_warm_up_peak_mult': 1.5
+        {
+            "name": "momo-adam",
+            "lr": [ 0.1],
+            "weight_decay": 0,
+            "lr_schedule": "constant"
         },
-        'gpt_model': {
-            'teacher_model': 'gpt2-medium',
-            'n_embd': 768,    # Hidden size used in distilgpt2
-            'n_layer': 5,    # Number of layers in distilgpt2
-            'n_head': 8,    # Number of attention heads in distilgpt2
-            'vocab_size': 50257 
-        },
+        {
+            "name": "sgd-m",
+            "lr": [0.001],
+            "weight_decay": 0,
+            "momentum": 0.9,
+            "dampening": 0.9,
+            "lr_schedule": "warm-up-cosine",
+            "warm_up_percent": 0.2
+        }
+    ],
+    "training_params": {
+        "batch_size": 8,
+        "num_epochs": 1,
+        "max_length": 512
+    },
+    "gpt_model": {
+        "model_name": "gpt2-medium",  # You can use one of the pre-defined models of transformers, or you can specify the exact dimension below
+        "n_embd": 768,  # Hidden size used in distilgpt2
+        "n_layer": 2,  # Number of layers in distilgpt2
+        "n_head": 4,  # Number of attention heads in distilgpt2
+        "vocab_size": 50304,
+        "tokenizer_name": "gpt2-large"
+    },
         'dataset': {
             'name': 'wikitext-2-raw-v1',
             'problem_name': 'default'
@@ -64,6 +88,7 @@ def load_config(default_config, config_file):
         config = yaml.safe_load(file)
     return merge_configs(default_config, config)
 
+## Plotting related functions
 def smoothen_curve_batch(data, num_points):
     smooth_data =[data[0]]
     t =0
@@ -108,12 +133,5 @@ def smoothen_dict(dict, num_points):
             dict[key] = smoothen_curve_exp(dict[key], num_points)
         # dict[key] = smoothen_curve(dict[key], num_points)
 
-def set_seed(seed):
-    random.seed(seed)
-    np.random.seed(seed)
-    torch.manual_seed(seed)
-    torch.cuda.manual_seed(seed)
-    torch.cuda.manual_seed_all(seed)  # if you are using multi-GPU
-    torch.backends.cudnn.deterministic = True
-    torch.backends.cudnn.benchmark = False  # May slow down training but ensures reproducibility
+
 

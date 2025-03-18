@@ -1,5 +1,6 @@
-# iams
+# GPT-opt
 
+Small package for testing optimization methods for training GPT models from the Transformers library
 ## GPT2 Distillation Example
 
 ### Create a virtual environment and activate:

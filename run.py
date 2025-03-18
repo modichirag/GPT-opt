@@ -3,13 +3,14 @@ import argparse
 import torch
 from torch.utils.data import DataLoader
 from transformers import GPT2Tokenizer, GPT2LMHeadModel, GPT2Config, AutoTokenizer, AutoModelForCausalLM
-from transformers import get_cosine_schedule_with_warmup
+
 from datasets import load_dataset, Dataset
 import matplotlib.pyplot as plt
 from gptopt.utils import compute_cross_entropy_loss, get_default_config, merge_configs, load_config, get_outputfile_from_configfile
 from gptopt.data import load_data
-from gptopt.train import train, get_scheduler
-from gptopt.utils import smoothen_dict, set_seed
+from gptopt.train import train
+from gptopt.optim.utils import get_scheduler, get_optimizer
+from gptopt.utils import set_seed
 import copy 
 import json
 
@@ -27,7 +28,7 @@ def main(config_file=None):
     # Load model using "model_name"
     if 'model_name' in config['gpt_model']:
         model = AutoModelForCausalLM.from_pretrained(config['gpt_model']['model_name'], torch_dtype=torch.float16, device_map="auto").to(device)
-        # teacher_model = GPT2LMHeadModel.from_pretrained(config['gpt_model']['teacher_model']).to(device)
+        # model = GPT2LMHeadModel.from_pretrained(config['gpt_model']['model_name']).to(device)
     else:
         gpt_config = config['gpt_model']
         model_config = GPT2Config(
@@ -43,33 +44,35 @@ def main(config_file=None):
     # Set the training parameters
     training_params = config['training_params'] 
     print(f"Training on dataset {config['dataset']['name']}")
-    
-# # Adam
-    adam_lr = float(config['optimizer_params']['adam_learning_rate'])  # Adjust the key if necessary
-    sgd_model = copy.deepcopy(model).to(device)  # The model remains the same
-    adam_optimizer = torch.optim.Adam(sgd_model.parameters(), lr=adam_lr)  # Replace SGD with Adam
-    adam_output = train(tokenizer, train_dataloader, sgd_model, adam_optimizer, training_params, device=device)
-    # Adam scheduler warm-up *2 then cosine decay
-    adam_lr = float(config['optimizer_params']['adam_learning_rate'])  # Adjust the key if necessary
-    sgd_model = copy.deepcopy(model).to(device)  # The model remains the same
-    adam_optimizer = torch.optim.Adam(sgd_model.parameters(), lr=adam_lr*config['training_params']['adam_warm_up_peak_mult'])  # Replace SGD with Adam
-    adam_sch_output = train(tokenizer, train_dataloader, sgd_model, adam_optimizer, training_params, device=device, get_scheduler_fn=get_cosine_schedule_with_warmup)
-     # SGD
-    sgd_lr = float(config['optimizer_params']['sgd_learning_rate'])
-    sgd_model = copy.deepcopy(model).to(device)
-    sgd_optimizer = torch.optim.SGD(sgd_model.parameters(), lr=sgd_lr,  momentum=0.9, dampening=0.9)
-    sgd_output = train(tokenizer, train_dataloader, sgd_model, sgd_optimizer, training_params, device = device)
-    # SGD scheduler warm-up *2 then cosine decay
-    sgd_model_sch = copy.deepcopy(model).to(device)
-    sgd_optimizer_sch = torch.optim.SGD(sgd_model_sch.parameters(), lr=sgd_lr*config['training_params']['warm_up_peak_mult'],  momentum=0.9, dampening=0.9)
-    sgd_sch_output = train(tokenizer, train_dataloader, sgd_model_sch, sgd_optimizer_sch,  training_params, device = device, get_scheduler_fn=get_cosine_schedule_with_warmup)
-    
-    sgd_output['name'] = 'sgd'
-    sgd_sch_output['name'] = 'sgd-sch' 
-    adam_output['name'] = 'adam'
-    adam_sch_output['name'] = 'adam-sch' 
+    # Access the optimizer parameters
+    optimizer_params = config["optimizer_params"]
 
-    outputs = [sgd_output, sgd_sch_output, adam_output, adam_sch_output ]
+    outputs = []
+    for optimizer_config in optimizer_params:
+        # print(f"Optimizer: {optimizer['name']}")
+        # print(f"Learning Rates: {optimizer['lr']}")
+        # print(f"Weight Decay: {optimizer.get('weight_decay', 0)}")  # Use .get() for optional keys
+        # print(f"LR Schedule: {optimizer['lr_schedule']}") 
+        for lr in optimizer['lr']:
+            model_copy = copy.deepcopy(model).to(device)  # The model remains the same
+            total_iterations = training_params['num_epochs'] * len(train_dataloader)
+            optimizer_obj, hyperp = get_optimizer(optimizer_config, lr = lr)
+            scheduler = get_scheduler(optimizer_config, total_iterations = total_iterations)
+            optimizer = optimizer_obj(params=model_copy.parameters(), **hyperp)
+            output = train(tokenizer, train_dataloader, model_copy, optimizer, training_params, device=device, scheduler=scheduler)
+            output['name'] = optimizer_config['name'] + '-lr-'+str(lr)
+            outputs.append(output)
+
+    # adam_lr = float(config['optimizer_params']['adam_learning_rate'])  # Adjust the key if necessary
+    # model_copy = copy.deepcopy(model).to(device)  # The model remains the same
+    # adam_optimizer = torch.optim.Adam(model_copy.parameters(), lr=adam_lr)  # Replace SGD with Adam
+    # adam_output = train(tokenizer, train_dataloader, model_copy, adam_optimizer, training_params, device=device)
+    # sgd_output['name'] = 'sgd'
+    # sgd_sch_output['name'] = 'sgd-sch' 
+    # adam_output['name'] = 'adam'
+    # adam_sch_output['name'] = 'adam-sch' 
+
+    # outputs = [sgd_output, sgd_sch_output, adam_output, adam_sch_output ]
 
     outputfile = get_outputfile_from_configfile(config_file) 
     with open(outputfile, 'w') as file: json.dump(outputs, file)

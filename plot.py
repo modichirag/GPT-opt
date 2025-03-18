@@ -26,7 +26,6 @@ def main(config_file=None):
     for output in outputs: #Smoothing
         smoothen_dict(output, num_points=100)
     
-
     def percentage_of_epoch(output, field):
         total_iterations = len(output[field])
         percentages = [i /total_iterations   * config['training_params']['num_epochs'] for i in range(total_iterations)]
