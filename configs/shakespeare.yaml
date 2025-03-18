@@ -4,22 +4,22 @@ name: "tiny_shakespeare_small"
 
 optimizer_params:
   - name: adam
-    lr: [0.000001, 0.00001, 0.0001, 0.001, 0.01, 0.1, 1, 10]
+    lr: [0.0001]
     weight_decay: 0
     lr_schedule: constant
 
-  - name: momo-adam
-    lr: [0.001,  0.1, 1]
-    weight_decay: 0
-    lr_schedule: constant
+  # - name: momo-adam
+  #   lr: [0.1]
+  #   weight_decay: 0
+  #   lr_schedule: constant
 
-  - name: sgd-m
-    lr: [0.001,  0.1, 1]
-    weight_decay: 0
-    momentum: 0.9
-    dampening: 0.9
-    lr_schedule: warm-up-cosine
-    warm_up_percent: 0.2
+  # - name: sgd-m
+  #   lr: [0.001,  0.1, 1]
+  #   weight_decay: 0
+  #   momentum: 0.9
+  #   dampening: 0.9
+  #   lr_schedule: warm-up-cosine
+  #   warm_up_percent: 0.2
 
 training_params:
   batch_size: 8

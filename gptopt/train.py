@@ -4,11 +4,8 @@ from torch.optim.lr_scheduler import LambdaLR, CosineAnnealingLR
 
 
 def train(tokenizer, train_dataloader, model,  optimizer, training_params,  device = "cuda", scheduler=None):
-
-    num_epochs = training_params['num_epochs']
     losses = [];  learning_rates = []
-
-    for epoch in range(num_epochs):
+    for epoch in range(training_params['num_epochs']):
         model.train() 
         for batch in train_dataloader:
             input_text = batch['text']
@@ -17,7 +14,7 @@ def train(tokenizer, train_dataloader, model,  optimizer, training_params,  devi
             attention_mask = inputs['attention_mask'].to(device)  # Move attention_mask to the GPU
             # Forward pass 
             labels = input_ids.clone().to(device)
-            labels[labels == tokenizer.pad_token_id] = -666
+            labels[labels == tokenizer.pad_token_id] = -100
             outputs  = model(input_ids=input_ids, attention_mask=attention_mask, labels=labels)
             loss     = outputs.loss  # Cross-entropy loss is computed internally when labels are provided
             losses.append(loss.item())
@@ -29,9 +26,7 @@ def train(tokenizer, train_dataloader, model,  optimizer, training_params,  devi
                 scheduler.step()
             for param_group in optimizer.param_groups:
                 learning_rates.append(param_group['lr'])
-        print(f"Epoch {epoch+1},  d Loss: {losses[-1]}") 
-
-
+        print(f"Epoch {epoch+1},  Loss: {losses[-1]}") 
     return {'losses' : losses, 'learning_rates': learning_rates }
   
 

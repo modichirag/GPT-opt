@@ -54,6 +54,7 @@ def main(config_file=None):
     for output in outputs:
         if 'iams' in output['name']:
             output['name'] = output['name'].replace('iams', 'iam')
+        name  = output['name'].split('-lr-')[0]  
         if output['name'] == 'iam':
             # plot hline with average teacher loss
             ax.hlines(np.mean(output['teacher_losses']),
@@ -63,15 +64,12 @@ def main(config_file=None):
                      linewidth=1.5,
                      ls='--'
             )
-            
-        ax.plot(percentage_of_epoch(output, 'student_losses'),
-                output['student_losses'],
+        ax.plot(percentage_of_epoch(output, 'losses'),
+                output['losses'],
                 label=output['name'],
-                marker=markermap[output['name']],
-                markevery =len(output['student_losses'])//4,
-                color=colormap[output['name']],
+                color=colormap[name],
                 linewidth=2,
-                linestyle=linestylemap[output['name']],
+                linestyle=linestylemap[name],
                 markersize=10,
                 alpha=0.95,
                 zorder= 3 if 'iam' in output['name'] else 1
@@ -84,7 +82,7 @@ def main(config_file=None):
                         bottom=0.155,
                         left=0.12,
                         right=0.99,)
-    fig.savefig('figures/gpt_distill-' + config['name'] + '.pdf', format='pdf', bbox_inches='tight')
+    fig.savefig('figures/' + config['name'] + '.pdf', format='pdf', bbox_inches='tight')
     
     #ax.yaxis.set_major_formatter(ScalarFormatter(useMathText=True))
     #ax.yaxis.get_major_formatter().set_scientific(True)
@@ -94,15 +92,16 @@ def main(config_file=None):
     for method_subset in [['sgd', 'sgd-sch', 'iam'], ['adam', 'adam-sch', 'iam-adam']]:
         fig, ax = plt.subplots(figsize=(4, 3))
         for output in outputs:
-            if output['name'] in method_subset:
+            name  = output['name'].split('-lr-')[0]
+            if name in method_subset:
                 plt.plot(percentage_of_epoch(output, 'learning_rates'),
                         output['learning_rates'],
                         label=output['name'],
-                        marker=markermap[output['name']],
-                        markevery =len(output['student_losses'])//4,
-                        color=colormap[output['name']],
+                        marker=markermap[name],
+                        markevery =len(output['losses'])//4,
+                        color=colormap[name],
                         linewidth=2,
-                        linestyle=linestylemap[output['name']],
+                        linestyle=linestylemap[name],
                         markersize=10)
             else:
                 continue
@@ -120,7 +119,7 @@ def main(config_file=None):
                             bottom=0.03,
                             left=0.155,
                             right=0.99)
-        name = 'figures/gpt_distill-lr-' if 'sgd' in method_subset else 'figures/gpt_distill-lr-adam-'
+        name = 'figures/lr-' if 'sgd' in method_subset else 'figures/lr-adam-'
         fig.savefig(name + config['name'] + '.pdf', format='pdf', bbox_inches='tight')
     
     # Plot legend

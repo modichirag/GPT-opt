@@ -27,7 +27,7 @@ def main(config_file=None):
     train_dataloader, test_dataloader = load_data(config['dataset']['name'], batch_size=config['training_params']['batch_size'])
     # Load model using "model_name"
     if 'model_name' in config['gpt_model']:
-        model = AutoModelForCausalLM.from_pretrained(config['gpt_model']['model_name'], torch_dtype=torch.float16, device_map="auto").to(device)
+        model = AutoModelForCausalLM.from_pretrained(config['gpt_model']['model_name'], device_map="auto").to(device)
         # model = GPT2LMHeadModel.from_pretrained(config['gpt_model']['model_name']).to(device)
     else:
         gpt_config = config['gpt_model']
@@ -45,20 +45,21 @@ def main(config_file=None):
     training_params = config['training_params'] 
     print(f"Training on dataset {config['dataset']['name']}")
     # Access the optimizer parameters
-    optimizer_params = config["optimizer_params"]
+    list_optimizer_params = config["optimizer_params"]
 
+    import pdb; pdb.set_trace()
     outputs = []
-    for optimizer_config in optimizer_params:
+    for optimizer_config in list_optimizer_params:
         # print(f"Optimizer: {optimizer['name']}")
         # print(f"Learning Rates: {optimizer['lr']}")
         # print(f"Weight Decay: {optimizer.get('weight_decay', 0)}")  # Use .get() for optional keys
         # print(f"LR Schedule: {optimizer['lr_schedule']}") 
-        for lr in optimizer['lr']:
+        for lr in optimizer_config['lr']:
             model_copy = copy.deepcopy(model).to(device)  # The model remains the same
             total_iterations = training_params['num_epochs'] * len(train_dataloader)
             optimizer_obj, hyperp = get_optimizer(optimizer_config, lr = lr)
-            scheduler = get_scheduler(optimizer_config, total_iterations = total_iterations)
             optimizer = optimizer_obj(params=model_copy.parameters(), **hyperp)
+            scheduler = get_scheduler(optimizer_config, optimizer, total_iterations = total_iterations)
             output = train(tokenizer, train_dataloader, model_copy, optimizer, training_params, device=device, scheduler=scheduler)
             output['name'] = optimizer_config['name'] + '-lr-'+str(lr)
             outputs.append(output)

@@ -21,13 +21,13 @@ def compute_cross_entropy_loss(model, input_ids, attention_mask, labels):
     shift_labels = labels[:, 1:].contiguous()      # Remove the first token in the labels
     
     # Flatten the logits and labels for cross-entropy loss
-    loss_fct = torch.nn.CrossEntropyLoss(ignore_index=-666)  # Ignore padding token (assumes -666 for padding)
+    loss_fct = torch.nn.CrossEntropyLoss(ignore_index=-100)  # Ignore padding token (assumes -100 for padding)
     loss = loss_fct(shift_logits.view(-1, shift_logits.size(-1)), shift_labels.view(-1))
     
     return loss
 
 def get_outputfile_from_configfile(config_file):
-    return 'gpt_distill/outputs/' + config_file.replace('configs/', '', 1).replace('.yaml', '', 1) + '.json'
+    return 'gptopt/outputs/' + config_file.replace('configs/', '', 1).replace('.yaml', '', 1) + '.json'
 
 def get_default_config():
     default_config = {
