@@ -88,9 +88,9 @@ def main(config_file=None):
         label = None
         if name not in plotted_methods:
             if lr_ranges[name][0] == lr_ranges[name][1]:  # Single learning rate
-                label = f"{name} lr={lr_ranges[name][0]:.4f}"
+                label = f"{name} lr={lr_ranges[name][0]:.1e}"  # Use scientific notation
             else:  # Range of learning rates
-                label = f"{name} lr in [{lr_ranges[name][0]:.4f}, {lr_ranges[name][1]:.4f}]"
+                label = f"{name} lr in [{lr_ranges[name][0]:.1e}, {lr_ranges[name][1]:.1e}]"  # Use scientific notation
 
         ax.plot(percentage_of_epoch(output, 'losses'),
                 output['losses'],
@@ -104,11 +104,12 @@ def main(config_file=None):
         )
         plotted_methods.add(name)  # Mark method as added to the legend
 
-    # Update legend to use opaque colors
+    # Update legend to use opaque colors without affecting plot transparency
     handles, labels = ax.get_legend_handles_labels()
-    for handle in handles:
-        handle.set_alpha(1.0)  # Set alpha to 1.0 for opaque colors
-    ax.legend(handles, labels, loc='upper right', fontsize=10)
+    legend_handles = [copy.copy(handle) for handle in handles]  # Create copies for the legend
+    for handle in legend_handles:
+        handle.set_alpha(1.0)  # Set alpha to 1.0 for opaque colors in the legend
+    ax.legend(legend_handles, labels, loc='upper right', fontsize=10)
 
     ax.set_xlabel('Epoch')
     ax.set_ylabel('Loss')
