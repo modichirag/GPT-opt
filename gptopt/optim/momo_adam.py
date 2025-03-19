@@ -69,7 +69,7 @@ class MomoAdam(torch.optim.Optimizer):
         # initialize
         self._number_steps = 0
         self.loss_avg = 0.
-        self.state['step_size_list'] = list() # for storing the adaptive step size term
+        self.step_size_list = list()  # Move step_size_list to an optimizer attribute
 
         return
 
@@ -226,6 +226,6 @@ class MomoAdam(torch.optim.Optimizer):
             self.state['h'] = h
             self.state['fstar'] = self.lb
         
-        self.state['step_size_list'].append(t1)
+        self.step_size_list.append(t1)  # Update the optimizer attribute instead of self.state
 
         return loss
