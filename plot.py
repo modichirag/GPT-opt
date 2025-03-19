@@ -128,26 +128,43 @@ def main(config_file=None):
     # Plot learning rates
     for method_subset in [['sgd-m', 'sgd-sch', 'momo'], ['adam', 'adam-sch', 'momo-adam']]:
         fig, ax = plt.subplots(figsize=(4, 3))
+        plotted_methods = set()  # To track methods already added to the legend
         for output in outputs:
-            name  = output['name'].split('-lr-')[0]
+            name = output['name'].split('-lr-')[0]
+            lr = float(output['name'].split('-lr-')[1])  # Extract learning rate
+            alpha = get_alpha_from_lr(lr, lr_range=lr_ranges[name])  # Calculate alpha transparency
+
             if name in method_subset:
+                label = None
+                if name not in plotted_methods:
+                    if lr_ranges[name][0] == lr_ranges[name][1]:  # Single learning rate
+                        label = f"{name} lr={lr_ranges[name][0]:.1e}"  # Use scientific notation
+                    else:  # Range of learning rates
+                        label = f"{name} lr in [{lr_ranges[name][0]:.1e}, {lr_ranges[name][1]:.1e}]"  # Use scientific notation
+
                 plt.plot(percentage_of_epoch(output, 'learning_rates'),
-                        output['learning_rates'],
-                        label=output['name'],
-                        marker=markermap[name],
-                        markevery =len(output['losses'])//4,
-                        color=colormap[name],
-                        linewidth=2,
-                        linestyle=linestylemap[name],
-                        markersize=10)
-            else:
-                continue
-        
+                         output['learning_rates'],
+                         label=label,  # Add to legend only once
+                         marker=markermap[name],
+                         markevery=len(output['losses']) // 4,
+                         color=colormap[name],
+                         linewidth=2,
+                         linestyle=linestylemap[name],
+                         markersize=10,
+                         alpha=alpha)  # Set alpha transparency
+                plotted_methods.add(name)  # Mark method as added to the legend
+
+        # Update legend to use opaque colors without affecting plot transparency
+        handles, labels = ax.get_legend_handles_labels()
+        legend_handles = [copy.copy(handle) for handle in handles]  # Create copies for the legend
+        for handle in legend_handles:
+            handle.set_alpha(1.0)  # Set alpha to 1.0 for opaque colors in the legend
+        ax.legend(legend_handles, labels, loc='upper right', fontsize=10)
+
         ax.grid(axis='both', lw=0.2, ls='--', zorder=0)
         ax.set_xticklabels([])  # Remove x-ticks
         ax.set_xlabel('')  # Remove x-axis label
         ax.set_ylabel('Learning rate')
-        ax.legend(loc='upper right', fontsize=10)
         # ax.set_yscale('log')
         ax.yaxis.set_major_formatter(ScalarFormatter(useMathText=True))
         ax.yaxis.get_major_formatter().set_scientific(True)
@@ -159,6 +176,51 @@ def main(config_file=None):
                             right=0.99)
         name = 'figures/lr-' if 'sgd-m' in method_subset else 'figures/lr-adam-'
         fig.savefig(name + config['name'] + '.pdf', format='pdf', bbox_inches='tight')
+    
+    # Plot step size lists
+    fig, ax = plt.subplots(figsize=(4, 3))
+    plotted_methods = set()  # To track methods already added to the legend
+    for output in outputs:
+        if 'step_size_list' not in output:
+            continue  # Skip outputs without step_size_list
+
+        name, lr = output['name'].split('-lr-')  # Split to get method name and learning rate
+        lr = float(lr)  # Convert learning rate to float
+        alpha = get_alpha_from_lr(lr, lr_range=lr_ranges[name])  # Calculate alpha transparency
+
+        label = None
+        if name not in plotted_methods:
+            if lr_ranges[name][0] == lr_ranges[name][1]:  # Single learning rate
+                label = f"{name} lr={lr_ranges[name][0]:.1e}"  # Use scientific notation
+            else:  # Range of learning rates
+                label = f"{name} lr in [{lr_ranges[name][0]:.1e}, {lr_ranges[name][1]:.1e}]"  # Use scientific notation
+
+        ax.plot(range(len(output['step_size_list'])),
+                output['step_size_list'],
+                label=label,  # Add to legend only once
+                color=colormap[name],
+                linewidth=2,
+                linestyle=linestylemap[name],
+                markersize=10,
+                alpha=alpha)  # Set alpha transparency
+        plotted_methods.add(name)  # Mark method as added to the legend
+
+    # Update legend to use opaque colors without affecting plot transparency
+    handles, labels = ax.get_legend_handles_labels()
+    legend_handles = [copy.copy(handle) for handle in handles]  # Create copies for the legend
+    for handle in legend_handles:
+        handle.set_alpha(1.0)  # Set alpha to 1.0 for opaque colors in the legend
+    ax.legend(legend_handles, labels, loc='upper right', fontsize=10)
+
+    ax.set_xlabel('Step')
+    ax.set_ylabel('Step Size')
+    ax.grid(axis='both', lw=0.2, ls='--', zorder=0)
+
+    fig.subplots_adjust(top=0.99,
+                        bottom=0.155,
+                        left=0.12,
+                        right=0.99)
+    fig.savefig('figures/step_size-' + config['name'] + '.pdf', format='pdf', bbox_inches='tight')
     
     # Plot legend
     # from matplotlib.lines import Line2D
