@@ -9,9 +9,9 @@ optimizer_params:
     lr_schedule: constant
 
   - name: momo-adam
-    lr: [0.0005]
+    lr: [0.0005, 0.001]
     weight_decay: 0
-    lb: 2.0
+    lb: 3.0
     lr_schedule: constant
 
   - name: sgd-m
