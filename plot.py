@@ -181,9 +181,10 @@ def main(config_file=None):
     fig, ax = plt.subplots(figsize=(4, 3))
     plotted_methods = set()  # To track methods already added to the legend
     for output in outputs:
+        import pdb; pdb.set_trace()
         if 'step_size_list' not in output:
             continue  # Skip outputs without step_size_list
-
+        
         name, lr = output['name'].split('-lr-')  # Split to get method name and learning rate
         lr = float(lr)  # Convert learning rate to float
         alpha = get_alpha_from_lr(lr, lr_range=lr_ranges[name])  # Calculate alpha transparency
