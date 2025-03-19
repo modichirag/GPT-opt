@@ -181,9 +181,8 @@ def main(config_file=None):
     fig, ax = plt.subplots(figsize=(4, 3))
     plotted_methods = set()  # To track methods already added to the legend
     for output in outputs:
-        # import pdb; pdb.set_trace()
-        if 'step_size_list' not in output:
-            continue  # Skip outputs without step_size_list
+        if 'step_size_list' not in output or 'learning_rates' not in output:
+            continue  # Skip outputs without step_size_list or learning_rates
         
         name, lr = output['name'].split('-lr-')  # Split to get method name and learning rate
         lr = float(lr)  # Convert learning rate to float
@@ -196,6 +195,7 @@ def main(config_file=None):
             else:  # Range of learning rates
                 label = f"{name} lr in [{lr_ranges[name][0]:.1e}, {lr_ranges[name][1]:.1e}]"  # Use scientific notation
 
+        # Plot step_size_list
         ax.plot(range(len(output['step_size_list'])),
                 output['step_size_list'],
                 label=label,  # Add to legend only once
@@ -204,6 +204,15 @@ def main(config_file=None):
                 linestyle=linestylemap[name],
                 markersize=10,
                 alpha=alpha)  # Set alpha transparency
+
+        # Plot learning_rates
+        ax.plot(range(len(output['learning_rates'])),
+                output['learning_rates'],
+                color=colormap[name],
+                linewidth=1.5,
+                linestyle='--',
+                alpha=alpha)  # Dashed line for learning_rates
+
         plotted_methods.add(name)  # Mark method as added to the legend
 
     # Update legend to use opaque colors without affecting plot transparency
@@ -214,7 +223,7 @@ def main(config_file=None):
     ax.legend(legend_handles, labels, loc='upper right', fontsize=10)
 
     ax.set_xlabel('Step')
-    ax.set_ylabel('Step Size')
+    ax.set_ylabel('Learning Rate')
     ax.grid(axis='both', lw=0.2, ls='--', zorder=0)
 
     fig.subplots_adjust(top=0.99,
@@ -223,36 +232,6 @@ def main(config_file=None):
                         right=0.99)
     fig.savefig('figures/step_size-' + config['name'] + '.pdf', format='pdf', bbox_inches='tight')
     
-    # Plot legend
-    # from matplotlib.lines import Line2D
-    # label_mapping = {'teacher' : 'teacher',
-    #             'sgd' : r'$\tt SGD$ (constant)',
-    #             'sgd-sch': r'$\tt SGD$ (schedule)',
-    #             'adam': r'$\tt Adam$ (constant)',
-    #             'adam-sch' : r'$\tt Adam$ (schedule)',
-    #             'iam' : r'$\tt IAM$',
-    #             'iam-adam': r'$\tt IAM-Adam$'
-    # }
-    # fig, ax = plt.subplots(figsize=(5.7,0.6))
-    # ax.axis('off')
-    # handles = list()
-    # labels = list()
-    # for k, v in colormap.items():
-    #     handles.append(Line2D([0], [0],
-    #                           c=v,
-    #                           linestyle='-' if linestylemap[k] is None else linestylemap[k],
-    #                           lw=2))
-    #     labels.append(label_mapping[k])
-    
-        
-    # fig.legend(handles, 
-    #            labels, 
-    #            loc='center', 
-    #            fontsize=11, 
-    #            framealpha=0, 
-    #            ncol=4,
-    #            mode="expand")
-    # fig.savefig('figures/legend.pdf', format='pdf', bbox_inches='tight')
 
 
 

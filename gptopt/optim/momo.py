@@ -179,12 +179,13 @@ class Momo(torch.optim.Optimizer):
                 
                 if lmbda > 0:
                     p.data.div_(1+lr*lmbda)
+
+                # Append step size for each parameter
+                self.step_size_list.append(tau)
                     
         ############################################################
         if self.use_fstar:
             self.state['h'] = h
             self.state['fstar'] = self.lb
             
-        self.step_size_list.append(t1)  # Update the optimizer attribute instead of self.state
-        
         return loss
