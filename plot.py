@@ -181,7 +181,7 @@ def main(config_file=None):
     fig, ax = plt.subplots(figsize=(4, 3))
     plotted_methods = set()  # To track methods already added to the legend
     for output in outputs:
-        import pdb; pdb.set_trace()
+        # import pdb; pdb.set_trace()
         if 'step_size_list' not in output:
             continue  # Skip outputs without step_size_list
         
