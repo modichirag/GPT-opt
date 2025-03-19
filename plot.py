@@ -104,8 +104,12 @@ def main(config_file=None):
         )
         plotted_methods.add(name)  # Mark method as added to the legend
 
+    # Update legend to use opaque colors
+    handles, labels = ax.get_legend_handles_labels()
+    for handle in handles:
+        handle.set_alpha(1.0)  # Set alpha to 1.0 for opaque colors
+    ax.legend(handles, labels, loc='upper right', fontsize=10)
 
-    ax.legend(loc='upper right', fontsize=10)
     ax.set_xlabel('Epoch')
     ax.set_ylabel('Loss')
     ax.grid(axis='both', lw=0.2, ls='--', zorder=0)
@@ -199,6 +203,6 @@ if __name__ == "__main__":
     else:
         print("No config file provided, using default settings.")
     main(args.config)
-    
+
 
 
