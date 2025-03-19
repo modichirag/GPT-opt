@@ -49,29 +49,62 @@ def main(config_file=None):
     }
     markermap =  {'momo' : None, 'sgd-m' : None, 'sgd-sch': None, 'teacher' : None,  "momo-adam": None, 'adam': None, 'adam-sch' : None}
     
+    def get_alpha_from_lr(lr, min_alpha=0.3, max_alpha=1.0, lr_range=None):
+        """Calculate alpha transparency based on the base learning rate."""
+        if lr_range and lr_range[0] == lr_range[1]:  # Single learning rate case
+            return max_alpha
+        return min_alpha + (max_alpha - min_alpha) * (lr - lr_range[0]) / (lr_range[1] - lr_range[0])
+
+    # Collect learning rate ranges for each method
+    lr_ranges = {}
+    for output in outputs:
+        name, lr = output['name'].split('-lr-')
+        lr = float(lr)
+        if name not in lr_ranges:
+            lr_ranges[name] = [lr, lr]
+        else:
+            lr_ranges[name][0] = min(lr_ranges[name][0], lr)
+            lr_ranges[name][1] = max(lr_ranges[name][1], lr)
+
     # Plot loss
     fig, ax = plt.subplots(figsize=(4, 3))
+    plotted_methods = set()  # To track methods already added to the legend
     for output in outputs:
-        name  = output['name'].split('-lr-')[0]  
+        name, lr = output['name'].split('-lr-')  # Split to get method name and learning rate
+        lr = float(lr)  # Convert learning rate to float
+        alpha = get_alpha_from_lr(lr, lr_range=lr_ranges[name])  # Calculate alpha transparency
+
         if output['name'] == 'momo':
             # plot hline with average teacher loss
             ax.hlines(output['lb'],
                      0, 1,
-                     label='teacher',
+                     label='teacher' if 'teacher' not in plotted_methods else None,
                      color="black",
                      linewidth=1.5,
                      ls='--'
             )
+            plotted_methods.add('teacher')
+
+        label = None
+        if name not in plotted_methods:
+            if lr_ranges[name][0] == lr_ranges[name][1]:  # Single learning rate
+                label = f"{name} lr={lr_ranges[name][0]:.4f}"
+            else:  # Range of learning rates
+                label = f"{name} lr in [{lr_ranges[name][0]:.4f}, {lr_ranges[name][1]:.4f}]"
+
         ax.plot(percentage_of_epoch(output, 'losses'),
                 output['losses'],
-                label=output['name'],
+                label=label,  # Add to legend only once
                 color=colormap[name],
                 linewidth=2,
                 linestyle=linestylemap[name],
                 markersize=10,
-                alpha=0.95,
-                zorder= 3 if 'momo' in output['name'] else 1
+                alpha=alpha,  # Set alpha transparency
+                zorder=3 if 'momo' in output['name'] else 1
         )
+        plotted_methods.add(name)  # Mark method as added to the legend
+
+
     ax.legend(loc='upper right', fontsize=10)
     ax.set_xlabel('Epoch')
     ax.set_ylabel('Loss')
