@@ -31,11 +31,11 @@ def train(tokenizer, train_dataloader, model,  optimizer, training_params,  devi
                 learning_rates.append(param_group['lr'])
         print(f"Epoch {epoch+1},  Loss: {losses[-1]}") 
 
-    # Check if optimizer has a state called 'step_size_list'
+    # Check if optimizer has a step_size_list attribute
     step_size_list = None
     output = {'losses': losses, 'learning_rates': learning_rates}
-    if hasattr(optimizer, 'step_size_list'):
-        step_size_list = optimizer['step_size_list']
+    if hasattr(optimizer, 'step_size_list'):  # Correctly check for the attribute
+        step_size_list = optimizer.step_size_list  # Access the attribute using dot notation
         output['step_size_list'] = step_size_list
     return output
 
