@@ -34,8 +34,8 @@ def train(tokenizer, train_dataloader, model,  optimizer, training_params,  devi
     # Check if optimizer has a state called 'step_size_list'
     step_size_list = None
     output = {'losses': losses, 'learning_rates': learning_rates}
-    if hasattr(optimizer.state, 'step_size_list'):
-        step_size_list = optimizer.state['step_size_list']
+    if hasattr(optimizer, 'step_size_list'):
+        step_size_list = optimizer['step_size_list']
         output['step_size_list'] = step_size_list
     return output
 
