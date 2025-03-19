@@ -120,15 +120,9 @@ def smoothen_curve_exp(data, num_points):
     return smooth_data
 
 def smoothen_dict(dict, num_points):
-    smooth_dict = {}
-    name = dict['name']
     for key in dict.keys():
         if key == 'name':
             continue
-        if key == 'learning_rates' and 'sch' in name:
-            continue
-        if key == 'learning_rates':
-            dict[key] = smoothen_curve_exp(dict[key], 400)
         else:
             dict[key] = smoothen_curve_exp(dict[key], num_points)
         # dict[key] = smoothen_curve(dict[key], num_points)
