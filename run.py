@@ -12,7 +12,7 @@ from gptopt.optim.utils import get_scheduler, get_optimizer
 from gptopt.utils import set_seed
 import copy 
 import json
-from gptopt.utils.hash_config import hash_config
+from gptopt.utils import hash_config
 import os
 
 def main(config_file=None):
