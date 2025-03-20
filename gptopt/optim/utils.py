@@ -5,6 +5,7 @@ from typing import Tuple
 from transformers import get_cosine_schedule_with_warmup
 from .momo import Momo
 from .momo_adam import MomoAdam
+from .muon import Muon
 # from .sps import SPS
 # from .adabound import AdaBoundW
 # from .adabelief import AdaBelief
@@ -108,6 +109,16 @@ def get_optimizer(opt_config: dict, lr = 1e-3) -> Tuple[torch.optim.Optimizer, d
                   'lb': opt_config.get('lb', 0.),
                   'divide': opt_config.get('divide', True),
                   'use_fstar': True
+                  }
+
+    elif name == 'muon':
+        opt_obj = Muon
+        hyperp = {'lr': lr,
+                  'wd': opt_config.get('weight_decay', 0),
+                  'adamw_betas': opt_config.get('betas', (0.95, 0.95)),
+                  'momentum': opt_config.get('momentum', 0.95),
+                  'nesterov': True,
+                  'ns_steps': opt_config.get('ns_steps', 5)
                   }
 
     # elif name == 'iam':
