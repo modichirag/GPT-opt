@@ -165,38 +165,6 @@ def main(config_file=None):
                             right=0.99)
         name = 'figures/lr-' if 'sgd-m' in method_subset else 'figures/lr-adam-'
         fig.savefig(name + config['name'] + '.pdf', format='pdf', bbox_inches='tight')
-    
-    # Plot legend
-    # from matplotlib.lines import Line2D
-    # label_mapping = {'teacher' : 'teacher',
-    #             'sgd' : r'$\tt SGD$ (constant)',
-    #             'sgd-sch': r'$\tt SGD$ (schedule)',
-    #             'adam': r'$\tt Adam$ (constant)',
-    #             'adam-sch' : r'$\tt Adam$ (schedule)',
-    #             'iam' : r'$\tt IAM$',
-    #             'iam-adam': r'$\tt IAM-Adam$'
-    # }
-    # fig, ax = plt.subplots(figsize=(5.7,0.6))
-    # ax.axis('off')
-    # handles = list()
-    # labels = list()
-    # for k, v in colormap.items():
-    #     handles.append(Line2D([0], [0],
-    #                           c=v,
-    #                           linestyle='-' if linestylemap[k] is None else linestylemap[k],
-    #                           lw=2))
-    #     labels.append(label_mapping[k])
-    
-        
-    # fig.legend(handles, 
-    #            labels, 
-    #            loc='center', 
-    #            fontsize=11, 
-    #            framealpha=0, 
-    #            ncol=4,
-    #            mode="expand")
-    # fig.savefig('figures/legend.pdf', format='pdf', bbox_inches='tight')
-
 
 
 if __name__ == "__main__":

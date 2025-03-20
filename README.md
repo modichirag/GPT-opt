@@ -41,12 +41,4 @@ module load python
 squeue --format="%.18i %.9P %.30j %.8u %.8T %.10M %.9l %.6D %R" --me
 ```
 
-### Debugging
-Check the version of torch
-python3.9 -c "import torch; print(torch.version.cuda)"
 
-Check the system version of CUDA
-nvcc --version
-
-Check if GPU is visible
-nvidia-smi

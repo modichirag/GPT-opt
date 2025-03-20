@@ -1,6 +1,6 @@
 # config.yaml
 
-name: "tiny_shakespeare"
+name: "shakespeare"
 
 optimizer_params:
   - name: adam
