@@ -53,7 +53,10 @@ def main(config_file=None):
             model_copy = copy.deepcopy(model).to(device)  # The model remains the same
             total_iterations = training_params['num_epochs'] * len(train_dataloader)
             optimizer_obj, hyperp = get_optimizer(optimizer_config, lr=lr)
-            optimizer = optimizer_obj(params=model_copy.parameters(), **hyperp)
+            if 'muon' in optimizer_config['name']: # muon needs named params to split b/w muon and adamW
+                optimizer = optimizer_obj(named_params=model_copy.named_parameters(), **hyperp)
+            else:
+                optimizer = optimizer_obj(params=model_copy.parameters(), **hyperp)
             scheduler = get_scheduler(optimizer_config, optimizer, total_iterations=total_iterations)
             if 'momo' in optimizer_config['name']:
                 output = train(tokenizer, train_dataloader, model_copy, optimizer, training_params, device=device, scheduler=scheduler, pass_loss=True)

@@ -22,6 +22,11 @@ optimizer_params:
     lr_schedule: warm-up-cosine
     warm_up_percent: 0.2
 
+  - name: muon
+    lr: [0.001]
+    weight_decay: 0
+    lr_schedule: constant
+
 training_params:
   batch_size: 8
   num_epochs: 1
