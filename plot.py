@@ -7,6 +7,7 @@ from gptopt.utils import get_default_config, load_config, get_outputfile_from_co
 import copy 
 import json
 import numpy as np 
+import os
 
 plt.rcParams["font.family"] = "serif"
 plt.rcParams['font.size'] = 12
@@ -20,8 +21,18 @@ def main(config_file=None):
     if config_file:
         config = load_config(default_config, config_file)
 
-    outputfile = get_outputfile_from_configfile(config_file) 
-    with open(outputfile, 'r') as file: outputs = json.load(file)
+    output_dir = f"gptopt/outputs/{config['name']}"
+    outputs = []
+
+    # Load all individual output files
+    for file_name in os.listdir(output_dir):
+        if file_name.endswith(".json"):
+            file_path = os.path.join(output_dir, file_name)
+            with open(file_path, 'r') as file:
+                output = json.load(file)
+                outputs.append(output)
+
+    print(f"Loaded {len(outputs)} outputs from {output_dir}")
 
     for output in outputs: #Smoothing
         smoothen_dict(output, num_points=100)
@@ -199,6 +210,6 @@ if __name__ == "__main__":
     else:
         print("No config file provided, using default settings.")
     main(args.config)
-    
+
 
 

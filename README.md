@@ -7,7 +7,6 @@ Small package for testing optimization methods for training GPT models from the 
  ./setup_env.sh
 ```
 
-
 ### Create a virtual environment and activate:
 ```bash
 python3.9 -m venv gptopt
@@ -25,9 +24,7 @@ python3.9 run.py --config configs/shakespeare.yaml
 python3.9 plot.py --config configs/shakespeare.yaml
 ```
 
-
 # On the cluster
-
 ### srun
 ```bash
 srun --gpus=1 --cpus-per-gpu=8 --time=150:00:00 --partition=gpu --constraint=a100 --pty bash

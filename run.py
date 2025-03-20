@@ -12,6 +12,8 @@ from gptopt.optim.utils import get_scheduler, get_optimizer
 from gptopt.utils import set_seed
 import copy 
 import json
+from gptopt.utils.hash_config import hash_config
+import os
 
 def main(config_file=None):
     set_seed(42)
@@ -42,24 +44,32 @@ def main(config_file=None):
     print(f"Training on dataset {config['dataset']['name']}")
     # Access the optimizer parameters
     list_optimizer_params = config["optimizer_params"]
-    outputs = []
+    output_dir = f"gptopt/outputs/{config['name']}"
+    os.makedirs(output_dir, exist_ok=True)  # Ensure the output directory exists
+
     for optimizer_config in list_optimizer_params:
         for lr in optimizer_config['lr']:
             print(f"Training with optimizer {optimizer_config['name']} and learning rate {lr}")
             model_copy = copy.deepcopy(model).to(device)  # The model remains the same
             total_iterations = training_params['num_epochs'] * len(train_dataloader)
-            optimizer_obj, hyperp = get_optimizer(optimizer_config, lr = lr)
+            optimizer_obj, hyperp = get_optimizer(optimizer_config, lr=lr)
             optimizer = optimizer_obj(params=model_copy.parameters(), **hyperp)
-            scheduler = get_scheduler(optimizer_config, optimizer, total_iterations = total_iterations)
+            scheduler = get_scheduler(optimizer_config, optimizer, total_iterations=total_iterations)
             if 'momo' in optimizer_config['name']:
                 output = train(tokenizer, train_dataloader, model_copy, optimizer, training_params, device=device, scheduler=scheduler, pass_loss=True)
             else:
                 output = train(tokenizer, train_dataloader, model_copy, optimizer, training_params, device=device, scheduler=scheduler)
-            output['name'] = optimizer_config['name'] + '-lr-'+str(lr)
-            outputs.append(output)
+            output['name'] = optimizer_config['name'] + '-lr-' + str(lr)
 
-    outputfile = get_outputfile_from_configfile(config_file) 
-    with open(outputfile, 'w') as file: json.dump(outputs, file)
+            # Generate hash for the current optimizer configuration
+            config_hash = hash_config(optimizer_config, training_params, config['gpt_model'])
+
+            # Save output to a separate file
+            file_name = f"{optimizer_config['name']}-lr-{lr}-{optimizer_config['lr_schedule']}-{config_hash}.json"
+            output_path = os.path.join(output_dir, file_name)
+            with open(output_path, 'w') as file:
+                json.dump(output, file)
+            print(f"Saved output to {output_path}")
    
 if __name__ == "__main__":
     # Argument parser to optionally provide a config file
@@ -72,6 +82,6 @@ if __name__ == "__main__":
     else:
         print("No config file provided, using default settings.")
     main(args.config)
-    
+
 
 
