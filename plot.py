@@ -20,8 +20,8 @@ def main(config_file=None):
     default_config = get_default_config() 
     if config_file:
         config = load_config(default_config, config_file)
-
-    output_dir = f"gptopt/outputs/{config['name']}"
+    outfilename = config_file.replace("configs/","").replace('.yaml','')
+    output_dir = f"gptopt/outputs/{outfilename}"
     outputs = []
 
     # Load all individual output files
@@ -125,7 +125,7 @@ def main(config_file=None):
                         bottom=0.155,
                         left=0.12,
                         right=0.99,)
-    fig.savefig('figures/' + config['name'] + '.pdf', format='pdf', bbox_inches='tight')
+    fig.savefig('figures/' + outfilename + '.pdf', format='pdf', bbox_inches='tight')
     
     #ax.yaxis.set_major_formatter(ScalarFormatter(useMathText=True))
     #ax.yaxis.get_major_formatter().set_scientific(True)
@@ -164,7 +164,7 @@ def main(config_file=None):
                             left=0.155,
                             right=0.99)
         name = 'figures/lr-' if 'sgd-m' in method_subset else 'figures/lr-adam-'
-        fig.savefig(name + config['name'] + '.pdf', format='pdf', bbox_inches='tight')
+        fig.savefig(name + outfilename + '.pdf', format='pdf', bbox_inches='tight')
 
 
 if __name__ == "__main__":

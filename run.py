@@ -20,7 +20,8 @@ def main(config_file=None):
     default_config = get_default_config()      # Default parameters if no config file is provided
     if config_file:
         config = load_config(default_config, config_file)
-
+        
+    output_dir = f"gptopt/outputs/{config_file.replace("configs/","").replace('.yaml','')}"
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
     train_dataloader, test_dataloader = load_data(config['dataset']['name'], batch_size=config['training_params']['batch_size'])
@@ -44,7 +45,7 @@ def main(config_file=None):
     print(f"Training on dataset {config['dataset']['name']}")
     # Access the optimizer parameters
     list_optimizer_params = config["optimizer_params"]
-    output_dir = f"gptopt/outputs/{config['name']}"
+    
     os.makedirs(output_dir, exist_ok=True)  # Ensure the output directory exists
 
     for optimizer_config in list_optimizer_params:
