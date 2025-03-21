@@ -7,7 +7,7 @@ import torch
 import math
 import warnings
 
-@torch.compile
+# @torch.compile  ## I had to comment this out, it was throwing an error
 def zeropower_via_newtonschulz5(G, steps):
     """
     Newton-Schulz iteration to compute the zeroth power / orthogonalization of G. We opt to use a
@@ -98,8 +98,8 @@ class Muon(torch.optim.Optimizer):
             else:
                 adamw_params.append(p)
                 adamw_params_names.append(name)
-        # print("Params trained with MUON : ", muon_params_names)
-        # print("Params trained with ADAMW : ", adamw_params_names)
+        print("Params trained with MUON : ", muon_params_names)
+        print("Params trained with ADAMW : ", adamw_params_names)
 
         
         params = list(muon_params)
