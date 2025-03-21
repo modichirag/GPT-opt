@@ -20,8 +20,8 @@ def main(config_file=None):
     default_config = get_default_config()      # Default parameters if no config file is provided
     if config_file:
         config = load_config(default_config, config_file)
-        
-    output_dir = f"gptopt/outputs/{config_file.replace("configs/","").replace('.yaml','')}"
+    outputname = config_file.replace("configs/","").replace('.yaml','')
+    output_dir = f"gptopt/outputs/{outputname}"
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
     train_dataloader, test_dataloader = load_data(config['dataset']['name'], batch_size=config['training_params']['batch_size'])
@@ -64,6 +64,11 @@ def main(config_file=None):
             else:
                 output = train(tokenizer, train_dataloader, model_copy, optimizer, training_params, device=device, scheduler=scheduler)
             output['name'] = optimizer_config['name'] + '-lr-' + str(lr)
+
+            # Add all other hyperparameters from optimizer_config to the output dictionary
+            for key, value in optimizer_config.items():
+                if key != 'lr':  # Exclude the 'lr' field
+                    output[key] = value
 
             # Generate hash for the current optimizer configuration
             config_hash = hash_config(optimizer_config, training_params, config['gpt_model'])

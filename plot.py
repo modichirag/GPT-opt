@@ -77,147 +77,102 @@ def main(config_file=None):
             lr_ranges[name][0] = min(lr_ranges[name][0], lr)
             lr_ranges[name][1] = max(lr_ranges[name][1], lr)
 
+    def plot_data(ax, outputs, field, ylabel, colormap, linestylemap, markermap, lr_ranges, config, plotted_methods, alpha_func, zorder_func=None):
+        """Generalized function to plot data."""
+        for output in outputs:
+            name, lr = output['name'].split('-lr-')
+            lr = float(lr)
+            alpha = alpha_func(lr, lr_range=lr_ranges[name])
+
+            label = None
+            if name not in plotted_methods:
+                if lr_ranges[name][0] == lr_ranges[name][1]:  # Single learning rate
+                    label = f"{name} lr={lr_ranges[name][0]:.4f}"
+                else:  # Range of learning rates
+                    label = f"{name} lr in [{lr_ranges[name][0]:.4f}, {lr_ranges[name][1]:.4f}]"
+
+            zorder = zorder_func(name) if zorder_func else 1
+            ax.plot(percentage_of_epoch(output, field),
+                    output[field],
+                    label=label,
+                    color=colormap[name],
+                    linewidth=2,
+                    linestyle=linestylemap[name],
+                    markersize=10,
+                    alpha=alpha,
+                    zorder=zorder)
+            plotted_methods.add(name)
+
+        ax.set_xlabel('Epoch')
+        ax.set_ylabel(ylabel)
+        ax.grid(axis='both', lw=0.2, ls='--', zorder=0)
+
+    def plot_step_size_and_lr(ax, outputs, colormap, linestylemap, lr_ranges, alpha_func):
+        """Generalized function to plot step_size_list and learning_rates."""
+        plotted_methods = set()
+        for output in outputs:
+            if 'step_size_list' not in output or 'learning_rates' not in output:
+                continue
+
+            name, lr = output['name'].split('-lr-')
+            lr = float(lr)
+            alpha = alpha_func(lr, lr_range=lr_ranges[name])
+
+            label = None
+            if name not in plotted_methods:
+                if lr_ranges[name][0] == lr_ranges[name][1]:
+                    label = f"{name} lr={lr_ranges[name][0]:.1e}"
+                else:
+                    label = f"{name} lr in [{lr_ranges[name][0]:.1e}, {lr_ranges[name][1]:.1e}]"
+
+            ax.plot(range(len(output['step_size_list'])),
+                    output['step_size_list'],
+                    label=label,
+                    color=colormap[name],
+                    linewidth=2,
+                    linestyle=linestylemap[name],
+                    alpha=alpha)
+
+            ax.plot(range(len(output['learning_rates'])),
+                    output['learning_rates'],
+                    color=colormap[name],
+                    linewidth=1.5,
+                    linestyle='--',
+                    alpha=alpha)
+
+            plotted_methods.add(name)
+
+        return plotted_methods
+
     # Plot loss
     fig, ax = plt.subplots(figsize=(4, 3))
-    plotted_methods = set()  # To track methods already added to the legend
-    for output in outputs:
-        name, lr = output['name'].split('-lr-')  # Split to get method name and learning rate
-        lr = float(lr)  # Convert learning rate to float
-        alpha = get_alpha_from_lr(lr, lr_range=lr_ranges[name])  # Calculate alpha transparency
-
-        if output['name'] == 'momo':
-            # plot hline with average teacher loss
-            ax.hlines(output['lb'],
-                     0, 1,
-                     label='teacher' if 'teacher' not in plotted_methods else None,
-                     color="black",
-                     linewidth=1.5,
-                     ls='--'
-            )
-            plotted_methods.add('teacher')
-
-        label = None
-        if name not in plotted_methods:
-            if lr_ranges[name][0] == lr_ranges[name][1]:  # Single learning rate
-                label = f"{name} lr={lr_ranges[name][0]:.4f}"
-            else:  # Range of learning rates
-                label = f"{name} lr in [{lr_ranges[name][0]:.4f}, {lr_ranges[name][1]:.4f}]"
-
-        ax.plot(percentage_of_epoch(output, 'losses'),
-                output['losses'],
-                label=label,  # Add to legend only once
-                color=colormap[name],
-                linewidth=2,
-                linestyle=linestylemap[name],
-                markersize=10,
-                alpha=alpha,  # Set alpha transparency
-                zorder=3 if 'momo' in output['name'] else 1
-        )
-        plotted_methods.add(name)  # Mark method as added to the legend
-
-
+    plotted_methods = set()
+    plot_data(ax, outputs, 'losses', 'Loss', colormap, linestylemap, markermap, lr_ranges, config, plotted_methods, get_alpha_from_lr, lambda name: 3 if 'momo' in name else 1)
     ax.legend(loc='upper right', fontsize=10)
-    ax.set_xlabel('Epoch')
-    ax.set_ylabel('Loss')
-    ax.grid(axis='both', lw=0.2, ls='--', zorder=0)
-
-    fig.subplots_adjust(top=0.99,
-                        bottom=0.155,
-                        left=0.12,
-                        right=0.99,)
+    fig.subplots_adjust(top=0.99, bottom=0.155, left=0.12, right=0.99)
     fig.savefig('figures/' + outfilename + '.pdf', format='pdf', bbox_inches='tight')
-    
-    #ax.yaxis.set_major_formatter(ScalarFormatter(useMathText=True))
-    #ax.yaxis.get_major_formatter().set_scientific(True)
-    #ax.yaxis.get_major_formatter().set_powerlimits((-1, 1))
-    
+
     # Plot learning rates
     for method_subset in [['sgd-m', 'sgd-sch', 'momo'], ['adam', 'adam-sch', 'momo-adam']]:
         fig, ax = plt.subplots(figsize=(4, 3))
-        for output in outputs:
-            name  = output['name'].split('-lr-')[0]
-            if name in method_subset:
-                plt.plot(percentage_of_epoch(output, 'learning_rates'),
-                        output['learning_rates'],
-                        label=output['name'],
-                        marker=markermap[name],
-                        markevery =len(output['losses'])//4,
-                        color=colormap[name],
-                        linewidth=2,
-                        linestyle=linestylemap[name],
-                        markersize=10)
-            else:
-                continue
-        
-        ax.grid(axis='both', lw=0.2, ls='--', zorder=0)
-        ax.set_xticklabels([])  # Remove x-ticks
-        ax.set_xlabel('')  # Remove x-axis label
-        ax.set_ylabel('Learning rate')
+        subset_outputs = [output for output in outputs if output['name'].split('-lr-')[0] in method_subset]
+        plot_data(ax, subset_outputs, 'learning_rates', 'Learning rate', colormap, linestylemap, markermap, lr_ranges, config, set(), get_alpha_from_lr)
         ax.legend(loc='upper right', fontsize=10)
-        # ax.set_yscale('log')
-        ax.yaxis.set_major_formatter(ScalarFormatter(useMathText=True))
-        ax.yaxis.get_major_formatter().set_scientific(True)
-        ax.yaxis.get_major_formatter().set_powerlimits((-1, 1))
-
-        fig.subplots_adjust(top=0.935,
-                            bottom=0.03,
-                            left=0.155,
-                            right=0.99)
+        fig.subplots_adjust(top=0.935, bottom=0.03, left=0.155, right=0.99)
         name = 'figures/lr-' if 'sgd-m' in method_subset else 'figures/lr-adam-'
         fig.savefig(name + outfilename + '.pdf', format='pdf', bbox_inches='tight')
-# Plot step size lists
+
+    # Plot step size lists
     fig, ax = plt.subplots(figsize=(4, 3))
-    plotted_methods = set()  # To track methods already added to the legend
-    for output in outputs:
-        if 'step_size_list' not in output or 'learning_rates' not in output:
-            continue  # Skip outputs without step_size_list or learning_rates
-        
-        name, lr = output['name'].split('-lr-')  # Split to get method name and learning rate
-        lr = float(lr)  # Convert learning rate to float
-        alpha = get_alpha_from_lr(lr, lr_range=lr_ranges[name])  # Calculate alpha transparency
-
-        label = None
-        if name not in plotted_methods:
-            if lr_ranges[name][0] == lr_ranges[name][1]:  # Single learning rate
-                label = f"{name} lr={lr_ranges[name][0]:.1e}"  # Use scientific notation
-            else:  # Range of learning rates
-                label = f"{name} lr in [{lr_ranges[name][0]:.1e}, {lr_ranges[name][1]:.1e}]"  # Use scientific notation
-
-        # Plot step_size_list
-        ax.plot(range(len(output['step_size_list'])),
-                output['step_size_list'],
-                label=label,  # Add to legend only once
-                color=colormap[name],
-                linewidth=2,
-                linestyle=linestylemap[name],
-                markersize=10,
-                alpha=alpha)  # Set alpha transparency
-
-        # Plot learning_rates
-        ax.plot(range(len(output['learning_rates'])),
-                output['learning_rates'],
-                color=colormap[name],
-                linewidth=1.5,
-                linestyle='--',
-                alpha=alpha)  # Dashed line for learning_rates
-
-        plotted_methods.add(name)  # Mark method as added to the legend
-
-    # Update legend to use opaque colors without affecting plot transparency
+    plotted_methods = plot_step_size_and_lr(ax, outputs, colormap, linestylemap, lr_ranges, get_alpha_from_lr)
     handles, labels = ax.get_legend_handles_labels()
-    legend_handles = [copy.copy(handle) for handle in handles]  # Create copies for the legend
+    legend_handles = [copy.copy(handle) for handle in handles]
     for handle in legend_handles:
-        handle.set_alpha(1.0)  # Set alpha to 1.0 for opaque colors in the legend
+        handle.set_alpha(1.0)
     ax.legend(legend_handles, labels, loc='upper right', fontsize=10)
-
     ax.set_xlabel('Step')
     ax.set_ylabel('Learning Rate')
-    ax.grid(axis='both', lw=0.2, ls='--', zorder=0)
-
-    fig.subplots_adjust(top=0.99,
-                        bottom=0.155,
-                        left=0.12,
-                        right=0.99)
+    fig.subplots_adjust(top=0.99, bottom=0.155, left=0.12, right=0.99)
     fig.savefig('figures/step_size-' + outfilename + '.pdf', format='pdf', bbox_inches='tight')
 
 if __name__ == "__main__":
