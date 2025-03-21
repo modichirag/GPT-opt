@@ -89,23 +89,15 @@ class Muon(torch.optim.Optimizer):
         )
 
         print("EMBED TOKENS AND LM_HEAD ARE NOT HANDLED CORRECTLY FOR MUON, THEY SHOULD BE WITH ADAMW.")
-        # muon_params = [p for name, p in named_params
-        #                if p.ndim >= 2 and "embed_tokens" not in name and "lm_head" not in name
-        # ]
-        # adamw_params = [p for name, p in  named_params
-        #                 if not ( p.ndim >= 2 and "embed_tokens" not in name and "lm_head" not in name)
-        # ]
         muon_params, muon_params_names = [], []
         adamw_params, adamw_params_names = [], []
         for name, p in named_params:
-                if p.ndim >= 2 and "embed_tokens" not in name and "lm_head" not in name:
-                        muon_params.append(p)
-                        muon_params_names.append(name)
-
-        for name, p in named_params:
-                if not( p.ndim >= 2 and "embed_tokens" not in name and "lm_head" not in name):
-                        adamw_params.append(p)
-                        adamw_params_names.append(name)
+            if p.ndim >= 2 and not any(excluded in name for excluded in ["embeddings", "embed_tokens", "wte", "lm_head", "wpe"]):
+                muon_params.append(p)
+                muon_params_names.append(name)
+            else:
+                adamw_params.append(p)
+                adamw_params_names.append(name)
         # print("Params trained with MUON : ", muon_params_names)
         # print("Params trained with ADAMW : ", adamw_params_names)
 
