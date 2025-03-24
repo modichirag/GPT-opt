@@ -7,7 +7,7 @@ import torch
 import math
 import warnings
 
-# @torch.compile  ## I had to comment this out, it was throwing an error
+@torch.compile  ## I had to comment this out, it was throwing an error
 def zeropower_via_newtonschulz5(G, steps):
     """
     Newton-Schulz iteration to compute the zeroth power / orthogonalization of G. We opt to use a
@@ -94,7 +94,7 @@ class Muon(torch.optim.Optimizer):
             else:
                 adamw_params.append(p)
                 adamw_params_names.append(name)
-        # print("EMBED TOKENS AND LM_HEAD ARE NOT HANDLED CORRECTLY FOR MUON, THEY SHOULD BE WITH ADAMW.")
+        # print("EMBED TOKENS AND LM_HEAD SHOULD BE WITH ADAMW.")
         # print("Params trained with MUON : ", muon_params_names)
         # print("Params trained with ADAMW : ", adamw_params_names)
         params = list(muon_params)
@@ -172,39 +172,39 @@ class Muon(torch.optim.Optimizer):
                 # apply update
                 p.data.add_(u, alpha=-adjusted_lr)
                 
-                ############################
-                #       AdamW backup       #
-                ############################
+            ############################
+            #       AdamW backup       #
+            ############################
 
-                params = [p for p in group["params"] if not self.state[p]["use_muon"]]
-                lr = group['lr']
-                beta1, beta2 = group["adamw_betas"]
-                eps = group["adamw_eps"]
-                weight_decay = group["wd"]
-                
-                for p in params:
-                    g = p.grad
-                    if g is None:
-                        continue
-                    state = self.state[p]
-                    if "step" not in state:
-                            state["step"] = 0
-                            state["moment1"] = torch.zeros_like(g)
-                            state["moment2"] = torch.zeros_like(g)
-                    state["step"] += 1
-                    step = state["step"]
-                    buf1 = state["moment1"]
-                    buf2 = state["moment2"]
-                    buf1.lerp_(g, 1 - beta1)
-                    buf2.lerp_(g.square(), 1 - beta2)
-                    
-                    g = buf1 / (eps + buf2.sqrt())
-                    
-                    bias_correction1 = 1 - beta1**step
-                    bias_correction2 = 1 - beta2**step
-                    scale = bias_correction1 / bias_correction2**0.5
-                    p.data.mul_(1 - lr * weight_decay)
-                    p.data.add_(g, alpha=-lr / scale)
+            params = [p for p in group["params"] if not self.state[p]["use_muon"]]
+            lr = group['lr']
+            beta1, beta2 = group["adamw_betas"]
+            eps = group["adamw_eps"]
+            weight_decay = group["wd"]
+
+            for p in params:
+                g = p.grad
+                if g is None:
+                    continue
+                state = self.state[p]
+                if "step" not in state:
+                    state["step"] = 0
+                    state["moment1"] = torch.zeros_like(g)
+                    state["moment2"] = torch.zeros_like(g)
+                state["step"] += 1
+                step = state["step"]
+                buf1 = state["moment1"]
+                buf2 = state["moment2"]
+                buf1.lerp_(g, 1 - beta1)
+                buf2.lerp_(g.square(), 1 - beta2)
+
+                g = buf1 / (eps + buf2.sqrt())
+
+                bias_correction1 = 1 - beta1**step
+                bias_correction2 = 1 - beta2**step
+                scale = bias_correction1 / bias_correction2**0.5
+                p.data.mul_(1 - lr * weight_decay)
+                p.data.add_(g, alpha=-lr / scale)
                     
         return loss
 
