@@ -49,6 +49,7 @@ def main(config_file=None):
                 'momo' : '#61ACE5',
                 'momo-adam': '#00518F',
                 'teacher' : 'k',
+                'muon': '#8A2BE2',  # Added a new color for "muon" (blue-violet)
     }
     linestylemap =  {'momo' : None,
                      'sgd-m' : None,
@@ -56,9 +57,9 @@ def main(config_file=None):
                      'teacher' : '--',  
                      'momo-adam': None,
                      'adam': None,
-                     'adam-sch' : '--'
+                     'adam-sch' : '--',
+                     'muon': None,  # Added a new linestyle for "muon"
     }
-    markermap =  {'momo' : None, 'sgd-m' : None, 'sgd-sch': None, 'teacher' : None,  "momo-adam": None, 'adam': None, 'adam-sch' : None}
     
     def get_alpha_from_lr(lr, min_alpha=0.3, max_alpha=1.0, lr_range=None):
         """Calculate alpha transparency based on the base learning rate."""
@@ -77,13 +78,12 @@ def main(config_file=None):
             lr_ranges[name][0] = min(lr_ranges[name][0], lr)
             lr_ranges[name][1] = max(lr_ranges[name][1], lr)
 
-    def plot_data(ax, outputs, field, ylabel, colormap, linestylemap, markermap, lr_ranges, config, plotted_methods, alpha_func, zorder_func=None):
+    def plot_data(ax, outputs, field, ylabel, colormap, linestylemap, lr_ranges, config, plotted_methods, alpha_func, zorder_func=None):
         """Generalized function to plot data."""
         for output in outputs:
             name, lr = output['name'].split('-lr-')
             lr = float(lr)
             alpha = alpha_func(lr, lr_range=lr_ranges[name])
-
             label = None
             if name not in plotted_methods:
                 if lr_ranges[name][0] == lr_ranges[name][1]:  # Single learning rate
@@ -98,7 +98,6 @@ def main(config_file=None):
                     color=colormap[name],
                     linewidth=2,
                     linestyle=linestylemap[name],
-                    markersize=10,
                     alpha=alpha,
                     zorder=zorder)
             plotted_methods.add(name)
@@ -147,7 +146,7 @@ def main(config_file=None):
     # Plot loss
     fig, ax = plt.subplots(figsize=(4, 3))
     plotted_methods = set()
-    plot_data(ax, outputs, 'losses', 'Loss', colormap, linestylemap, markermap, lr_ranges, config, plotted_methods, get_alpha_from_lr, lambda name: 3 if 'momo' in name else 1)
+    plot_data(ax, outputs, 'losses', 'Loss', colormap, linestylemap, lr_ranges, config, plotted_methods, get_alpha_from_lr, lambda name: 3 if 'momo' in name else 1)
     ax.legend(loc='upper right', fontsize=10)
     fig.subplots_adjust(top=0.99, bottom=0.155, left=0.12, right=0.99)
     fig.savefig('figures/' + outfilename + '.pdf', format='pdf', bbox_inches='tight')
@@ -156,7 +155,7 @@ def main(config_file=None):
     for method_subset in [['sgd-m', 'sgd-sch', 'momo'], ['adam', 'adam-sch', 'momo-adam']]:
         fig, ax = plt.subplots(figsize=(4, 3))
         subset_outputs = [output for output in outputs if output['name'].split('-lr-')[0] in method_subset]
-        plot_data(ax, subset_outputs, 'learning_rates', 'Learning rate', colormap, linestylemap, markermap, lr_ranges, config, set(), get_alpha_from_lr)
+        plot_data(ax, subset_outputs, 'learning_rates', 'Learning rate', colormap, linestylemap, lr_ranges, config, set(), get_alpha_from_lr)
         ax.legend(loc='upper right', fontsize=10)
         fig.subplots_adjust(top=0.935, bottom=0.03, left=0.155, right=0.99)
         name = 'figures/lr-' if 'sgd-m' in method_subset else 'figures/lr-adam-'

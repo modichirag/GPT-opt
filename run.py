@@ -64,18 +64,13 @@ def main(config_file=None):
             else:
                 output = train(tokenizer, train_dataloader, model_copy, optimizer, training_params, device=device, scheduler=scheduler)
             output['name'] = optimizer_config['name'] + '-lr-' + str(lr)
-
-            # Add all other hyperparameters from optimizer_config to the output dictionary
-            for key, value in optimizer_config.items():
-                if key != 'lr':  # Exclude the 'lr' field
-                    output[key] = value
-
             # Generate hash for the current optimizer configuration
             config_hash = hash_config(optimizer_config, training_params, config['gpt_model'])
-
             # Save output to a separate file
             file_name = f"{optimizer_config['name']}-lr-{lr}-{optimizer_config['lr_schedule']}-{config_hash}.json"
             output_path = os.path.join(output_dir, file_name)
+            if os.path.exists(output_path):
+                print(f"File {output_path} already exists. Overwriting")
             with open(output_path, 'w') as file:
                 json.dump(output, file)
             print(f"Saved output to {output_path}")
