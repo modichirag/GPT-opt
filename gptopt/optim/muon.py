@@ -65,9 +65,6 @@ class Muon(torch.optim.Optimizer):
         adamw_eps: The epsilon for the internal AdamW.
         adamw_wd: The weight decay for the internal AdamW.
     """
-
-
-
     def __init__(self,
                  named_params,
                  lr=1e-3,
@@ -113,14 +110,11 @@ class Muon(torch.optim.Optimizer):
         for p in adamw_params:
                 # Do not use Muon for parameters in adamw_params
                 self.state[p]["use_muon"] = False
-                
 
     def adjust_lr_for_muon(self, lr, param_shape):
-        A, B = param_shape[:2]
-        # We adjust the learning rate and weight decay based on the size of the parameter matrix
-        # as describted in the paper
-        adjusted_ratio = 0.2 * math.sqrt(max(A, B))
-        adjusted_lr = lr * adjusted_ratio
+        fan_out, fan_in = param_shape[:2]
+        # Rescale the learning rate by sqrt(fan-out / fan-in)
+        adjusted_lr = lr * math.sqrt(fan_out / fan_in)
         return adjusted_lr
 
     def step(self, closure=None):

@@ -60,9 +60,9 @@ def main(config_file=None):
                 optimizer = optimizer_obj(params=model_copy.parameters(), **hyperp)
             scheduler = get_scheduler(optimizer_config, optimizer, total_iterations=total_iterations)
             if 'momo' in optimizer_config['name']:
-                output = train(tokenizer, train_dataloader, model_copy, optimizer, training_params, device=device, scheduler=scheduler, pass_loss=True)
-            else:
-                output = train(tokenizer, train_dataloader, model_copy, optimizer, training_params, device=device, scheduler=scheduler)
+                output = train(tokenizer, train_dataloader, test_dataloader, model_copy, optimizer, training_params, device=device, scheduler=scheduler, pass_loss=True)
+            else:             
+                output = train(tokenizer, train_dataloader, test_dataloader, model_copy, optimizer, training_params, device=device, scheduler=scheduler)
             output['name'] = optimizer_config['name'] + '-lr-' + str(lr)
             # Generate hash for the current optimizer configuration
             config_hash = hash_config(optimizer_config, training_params, config['gpt_model'])
