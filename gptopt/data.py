@@ -1,18 +1,18 @@
-
 from datasets import load_dataset, Dataset
 from torch.utils.data import DataLoader
-
 
 def load_data(name, batch_size):
     if name == 'tiny_shakespeare':
         return load_tiny_shakespeare(batch_size)
     elif name == 'ptb_text_only':
         return load_ptb_text_only(batch_size)
-    else: 
-        return load_wikitext(name, batch_size) 
-
+    elif name == 'wikitext-103':
+        return load_wikitext('wikitext-103-v1', batch_size)  # Reuse load_wikitext for wikitext-103
+    else:
+        return load_wikitext(name, batch_size)
 
 def load_wikitext(name, batch_size):
+    """General function to load WikiText datasets."""
     dataset = load_dataset('wikitext', name, trust_remote_code=True)
     print(f"Number of training samples: {len(dataset['train'])}")
     print(f"Number of validation samples: {len(dataset['validation'])}")
@@ -23,8 +23,6 @@ def load_wikitext(name, batch_size):
     train_dataloader = DataLoader(dataset['train'], batch_size=batch_size, shuffle=True)
     test_dataloader = DataLoader(dataset['test'], batch_size=batch_size)
     return train_dataloader, test_dataloader
-
-
 
 def load_ptb_text_only(batch_size):
     dataset = load_dataset('ptb_text_only', trust_remote_code=True)
