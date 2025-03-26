@@ -31,6 +31,7 @@ training_params:
 
 gpt_model:
   model_name: "gpt2-medium"  #  You can use one of the pre-defined models of transformers, or you can specify the exact dimension below
+  finetuning: False
   n_embd: 768    # Hidden size used in gpt2
   n_layer: 2    # Number of layers in gpt2
   n_head: 4    # Number of attention heads in gpt2

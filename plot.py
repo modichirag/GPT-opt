@@ -76,7 +76,7 @@ def main(config_file=None):
     print(f"Loaded {len(outputs)} outputs from {output_dir}")
 
     for output in outputs:  # Smoothing
-        smoothen_dict(output, num_points=100)
+        smoothen_dict(output, num_points=100, beta =0.05)
 
     colormap = {'sgd-m': '#B3CBB9',
                 'sgd-sch': '#B3CBB9',
