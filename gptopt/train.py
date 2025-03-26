@@ -1,7 +1,7 @@
 from gptopt.utils import compute_cross_entropy_loss
 import torch
 from torch.optim.lr_scheduler import LambdaLR, CosineAnnealingLR
-
+import time  # Import time module to measure execution time
 
 def compute_loss_on_batch(tokenizer, model, batch, device, max_length):
     """Simplified helper function to compute loss on a batch."""
@@ -13,6 +13,8 @@ def train(tokenizer, train_dataloader, test_dataloader, model, optimizer, traini
     losses = []
     test_losses = []
     learning_rates = []
+    step_times = []  # List to record time spent on optimizer.step()
+
     for epoch in range(training_params['num_epochs']):
         model.train()
         for batch in train_dataloader:
@@ -23,10 +25,13 @@ def train(tokenizer, train_dataloader, test_dataloader, model, optimizer, traini
             # Optimization step
             optimizer.zero_grad()
             loss.backward()
+            start_time = time.time()  # Start timing optimizer.step()
             if pass_loss:
                 optimizer.step(closure=None, loss=loss)
             else:
                 optimizer.step()
+            step_time = time.time() - start_time  # Calculate elapsed time
+            step_times.append(step_time)  # Record the time
             if scheduler is not None:
                 scheduler.step()
             for param_group in optimizer.param_groups:
@@ -43,7 +48,7 @@ def train(tokenizer, train_dataloader, test_dataloader, model, optimizer, traini
         test_losses.append(test_loss)
         print(f"Epoch {epoch+1}, Test Loss: {test_loss}")
 
-    output = {'losses': losses, 'test_losses': test_losses, 'learning_rates': learning_rates}
+    output = {'losses': losses, 'test_losses': test_losses, 'learning_rates': learning_rates, 'step_times': step_times}
     # Check if optimizer has a step_size_list attribute
     step_size_list = None
     if hasattr(optimizer, 'step_size_list'):  # Correctly check for the attribute
