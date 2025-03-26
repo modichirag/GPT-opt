@@ -7,7 +7,7 @@ import torch
 import math
 import warnings
 
-@torch.compile  ## I had to comment this out, it was throwing an error
+# @torch.compile  ## I had to comment this out, it was throwing an error
 def zeropower_via_newtonschulz5(G, steps):
     """
     Newton-Schulz iteration to compute the zeroth power / orthogonalization of G. We opt to use a
