@@ -47,6 +47,7 @@ def train(tokenizer, train_dataloader, test_dataloader, model, optimizer, traini
                 optimizer.step(closure=None, loss=loss)
             else:
                 optimizer.step()
+            torch.cuda.synchronize()
             step_time = time.time() - start_time  # Calculate elapsed time
             step_times.append(step_time)  # Record the time
             if ib % 10 == 0 :
