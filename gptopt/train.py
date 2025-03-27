@@ -3,6 +3,8 @@ import torch
 from torch.optim.lr_scheduler import LambdaLR, CosineAnnealingLR
 import time  # Import time module to measure execution time
 
+typedict = {"float16":torch.float16, "float32":torch.float32, "bfloat16":torch.bfloat16}
+
 def compute_loss_on_batch(tokenizer, model, batch, device, max_length):
     """Simplified helper function to compute loss on a batch."""
     inputs = tokenizer(batch['text'], return_tensors="pt", max_length=max_length, padding=True, truncation=True).to(device)
@@ -26,14 +28,20 @@ def train(tokenizer, train_dataloader, test_dataloader, model, optimizer, traini
     # Training loop
     for epoch in range(training_params['num_epochs']):
         model.train()
-        for batch in train_dataloader:
+        for ib, batch in enumerate(train_dataloader):
             # Compute training loss
-            loss = compute_loss_on_batch(tokenizer, model, batch, device, training_params['max_length'])
+            if training_params['autocast']:
+                with torch.autocast(device_type=device, dtype=typedict[training_params['mixed_precision']]):
+                    loss = compute_loss_on_batch(tokenizer, model, batch, device, training_params['max_length'])
+            else:
+                loss = compute_loss_on_batch(tokenizer, model, batch, device, training_params['max_length'])
             losses.append(loss.item())
             
             # Optimization step
             optimizer.zero_grad()
             loss.backward()
+            if 'gradnorm' in training_params:
+                norm = torch.nn.utils.clip_grad_norm_(model.parameters(), training_params['gradnorm'])
             start_time = time.time()  # Start timing optimizer.step()
             if pass_loss:
                 optimizer.step(closure=None, loss=loss)
@@ -41,6 +49,8 @@ def train(tokenizer, train_dataloader, test_dataloader, model, optimizer, traini
                 optimizer.step()
             step_time = time.time() - start_time  # Calculate elapsed time
             step_times.append(step_time)  # Record the time
+            if ib % 10 == 0 :
+                print(f"Time taken for step : {step_time*1000:0.2f}ms | Loss : {loss.item():0.3f}")
             if scheduler is not None:
                 scheduler.step()
             for param_group in optimizer.param_groups:

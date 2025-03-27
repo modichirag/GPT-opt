@@ -25,7 +25,7 @@ def main(config_file=None):
     outputname = config_file.replace("configs/","").replace('.yaml','')
     output_dir = f"gptopt/outputs/{outputname}"
     os.makedirs(output_dir, exist_ok=True)  
-    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    device = "cuda" if torch.cuda.is_available() else "cpu"
     print(f"Using device: {device}")
     if 'matmul_precision' in config['training_params']:
         torch.set_float32_matmul_precision(config['training_params']['matmul_precision'])
