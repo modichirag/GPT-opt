@@ -2,10 +2,9 @@ import yaml
 import argparse
 import torch
 from torch.utils.data import DataLoader
-# from transformers import GPT2Tokenizer, GPT2LMHeadModel, GPT2Config, AutoTokenizer, AutoModelForCausalLM
 from datasets import load_dataset, Dataset
 import matplotlib.pyplot as plt
-from gptopt.utils import compute_cross_entropy_loss, get_default_config, merge_configs, load_config, get_outputfile_from_configfile
+from gptopt.utils import get_default_config, load_config
 from gptopt.data import load_data
 from gptopt.train import train
 from gptopt.optim.utils import get_scheduler, get_optimizer
@@ -28,10 +27,12 @@ def main(config_file=None):
     os.makedirs(output_dir, exist_ok=True)  
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     print(f"Using device: {device}")
+    if 'matmul_precision' in config['training_params']:
+        torch.set_float32_matmul_precision(config['training_params']['matmul_precision'])
 
     # Load model
     model, tokenizer = load_model_and_tokenizer(config, device)
-    
+                                                   
     # Set the training parameters
     training_params = config['training_params'] 
     print(f"Training on dataset {config['dataset']['name']}")
@@ -46,21 +47,25 @@ def main(config_file=None):
             print()
             print(f"Training with optimizer {optimizer_config['name']} and learning rate {lr}")
             model_copy = copy.deepcopy(model).to(device)  # The model remains the same
-            total_iterations = training_params['num_epochs'] * len(train_dataloader)
+            if config['training_params']['compile']:
+                print("Compiling model")
+                model_copy = torch.compile(model_copy)
+                
             optimizer_obj, hyperp = get_optimizer(optimizer_config, lr=lr)
             if 'muon' in optimizer_config['name']: # muon needs named params to split b/w muon and adamW
                 optimizer = optimizer_obj(named_params=model_copy.named_parameters(), **hyperp)
             else:
                 optimizer = optimizer_obj(params=model_copy.parameters(), **hyperp)
+            total_iterations = training_params['num_epochs'] * len(train_dataloader)
             scheduler = get_scheduler(optimizer_config, optimizer, total_iterations=total_iterations)
-            if 'momo' in optimizer_config['name']:
-                output = train(tokenizer, train_dataloader, test_dataloader, model_copy, optimizer, training_params, device=device, scheduler=scheduler, pass_loss=True)
-            else:             
-                output = train(tokenizer, train_dataloader, test_dataloader, model_copy, optimizer, training_params, device=device, scheduler=scheduler)
+
+            # Train
+            output = train(tokenizer, train_dataloader, test_dataloader, model_copy, optimizer, training_params, device=device, scheduler=scheduler)
+
+            # Save
             output['name'] = optimizer_config['name'] + '-lr-' + str(lr)
             # Generate hash for the current optimizer configuration
             config_hash = hash_config(optimizer_config, training_params, config['gpt_model'])
-            # Save output to a separate file
             file_name = f"{optimizer_config['name']}-lr-{lr}-{optimizer_config['lr_schedule']}-{config_hash}.json"
             output_path = os.path.join(output_dir, file_name)
             if os.path.exists(output_path):
@@ -68,7 +73,8 @@ def main(config_file=None):
             with open(output_path, 'w') as file:
                 json.dump(output, file)
             print(f"Saved output to {output_path}")
-   
+
+            
 if __name__ == "__main__":
     # Argument parser to optionally provide a config file
     parser = argparse.ArgumentParser(description='Train GPT-2 with optional config file.')

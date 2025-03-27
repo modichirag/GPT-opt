@@ -9,12 +9,21 @@ def compute_loss_on_batch(tokenizer, model, batch, device, max_length):
     outputs = model(**inputs, labels=inputs["input_ids"])
     return outputs.loss
 
-def train(tokenizer, train_dataloader, test_dataloader, model, optimizer, training_params, device="cuda", scheduler=None, pass_loss=False):
+
+def train(tokenizer, train_dataloader, test_dataloader, model, optimizer, training_params, device="cuda", scheduler=None):
     losses = []
     test_losses = []
     learning_rates = []
     step_times = []  # List to record time spent on optimizer.step()
+    optimizer_name = optimizer.__class__.__name__
+    if 'Momo' in optimizer_name:
+        pass_loss = True
+        print(f"Set pass_loss to True for optimizer {optimizer_name}")
+    else:
+        pass_loss = False
+        print(f"Set pass_loss to False for optimizer {optimizer_name}")
 
+    # Training loop
     for epoch in range(training_params['num_epochs']):
         model.train()
         for batch in train_dataloader:
