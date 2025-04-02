@@ -9,19 +9,19 @@ Small package for testing optimization methods for training GPT models from the 
 
 ### Create a virtual environment and activate:
 ```bash
-python3.9 -m venv gptopt
+python3 -m venv gptopt
 source gptopt/bin/activate
-python3.9 -m pip install -e .
+python3 -m pip install -e .
 ```
 
 ### Run Example:
 ```bash
-python3.9 run.py --config configs/shakespeare.yaml
+python3 run.py --config configs/shakespeare.yaml
 ```
 
 ### Plot Results:
 ```bash
-python3.9 plot.py --config configs/shakespeare.yaml
+python3 plot.py --config configs/shakespeare.yaml
 ```
 
 # On the cluster
