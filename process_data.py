@@ -8,7 +8,7 @@ from gptopt.data_utils import tokenize, write_datafile, process_and_save_docs
 ## Dict to map local data name to huggingface path and name
 datadict = {
     "fineweb10B" : ["HuggingFaceFW/fineweb", "sample-10BT"],
-    "fineweb-edu10B" : ["HuggingFaceFW/fineweb-ed", "sample-10BT"],
+    "fineweb_edu10B" : ["HuggingFaceFW/fineweb-edu", "sample-10BT"],
     "tiny_shakespeare" : ["tiny_shakespeare", ""],
     "wikitext" : ["wikitext", "wikitext-103-v1"]    
 }
@@ -54,3 +54,4 @@ elif name == "wikitext":
 elif 'fineweb' in name:
     process_and_save_docs(dataset['train'], dataset_path, encoding=enc, shard_size=args.shard_size, nprocs=args.nprocs)
     
+print(f"{name} data processed and saved in {dataset_path}")
