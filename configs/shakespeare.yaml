@@ -27,7 +27,7 @@ optimizer_params:
 training_params:
   batch_size: 16
   num_epochs: 1
-  max_length: 512
+  context_length: 512
   gradnorm: 1.0
   matmul_precision: high   #Can be highest, high, or medium
   autocast: True
@@ -37,6 +37,7 @@ training_params:
 gpt_model:
   model_name: "gpt2"  # If specified, it ignores explicit parameters specified below and loads this model name. 
   pretrained: False
+  tokenizer: "gpt2"
   # n_embd: 768    # Hidden size used in gpt2
   # n_layer: 2    # Number of layers in gpt2
   # n_head: 4    # Number of attention heads in gpt2
