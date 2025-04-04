@@ -7,6 +7,8 @@ from torch.utils.data import IterableDataset
 import torch.distributed as dist
 
 magic_number = 20250401         # used in the header of saved binary files
+DATA_DIR = "/mnt/ceph/users/cmodi/huggingface/"
+
 
 def load_data_shard(filename, device):
     header = torch.from_file(filename, False, 256, dtype=torch.int32) # header is 256 int32
@@ -50,14 +52,21 @@ class ShardedDataLoader(IterableDataset):
         shard_list = sorted([s for s in file_list if split in s])
         self.shards = [os.path.join(self.data_path, s) for s in shard_list]
         self.n_shards = len(self.shards)
+        self.get_length()
         self.reset()
-        #print(f"Position initialized at {self.current_position} in rank {self.rank}")
-  
         
     def reset(self):
         self.current_shard = 0
         self.current_position = self.B * self.T * self.rank
         self.tokens = load_data_shard(self.shards[self.current_shard], self.device)
+
+
+    def get_length(self):
+        tokens = load_data_shard(self.shards[-1], self.device)
+        self.size = int(1e8*(self.n_shards - 1) + len(tokens))
+
+    def __len__(self):
+        return self.size
         
     def next_batch(self):
         B, T = self.B, self.T
