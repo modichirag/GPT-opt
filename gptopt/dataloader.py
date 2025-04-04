@@ -72,7 +72,7 @@ class ShardedDataLoader(IterableDataset):
         B, T = self.B, self.T
         rank, world_size = self.rank, self.world_size
         buf = self.tokens[self.current_position: self.current_position + B*T+1]
-        x = (buf[:-1]).view(B, T).to(device=self.device, dtype=torch.int32, non_blocking=True) # inputs
+        x = (buf[:-1]).view(B, T).to(device=self.device, dtype=torch.int64, non_blocking=True) # inputs
         y = (buf[1:]).view(B, T).to(device=self.device, dtype=torch.int64, non_blocking=True) # targets
         self.current_position += B*T*self.world_size
         # move to next shard if next iteration will be out of bounds
