@@ -9,12 +9,12 @@ from gptopt.data import load_data
 from gptopt.train import train
 from gptopt.optim.utils import get_scheduler, get_optimizer
 from gptopt.utils import set_seed
-from gptopt.model import load_model_and_tokenizer
+from gptopt.model import load_model
+from gptopt.dataloader import DATA_DIR, ShardedDataLoader
 import copy 
 import json
 from gptopt.utils import hash_config
 import os
-
 
 def main(config_file=None):
 
@@ -31,7 +31,7 @@ def main(config_file=None):
         torch.set_float32_matmul_precision(config['training_params']['matmul_precision'])
 
     # Load model
-    model, tokenizer = load_model_and_tokenizer(config, device)
+    model = load_model(config, device)
                                                    
     # Set the training parameters
     training_params = config['training_params'] 
@@ -40,14 +40,19 @@ def main(config_file=None):
     list_optimizer_params = config["optimizer_params"]
 
     # Load data
-    train_dataloader, test_dataloader = load_data(config['dataset']['name'], batch_size=config['training_params']['batch_size'])
-
+    dataset_path = DATA_DIR + f"/{config['dataset']['name']}-{config['gpt_model']['tokenizer']}/"
+    print(f"Load data from {dataset_path}")
+    B, T = training_params['batch_size'], training_params['context_length']
+    train_dataloader = ShardedDataLoader(dataset_path, B, T, "train", device)
+    val_dataloader = ShardedDataLoader(dataset_path, B, T, "val", device)
+    print(f"Length of train/val dataset : {len(train_dataloader)}/{len(val_dataloader)} tokens")
+    
     for optimizer_config in list_optimizer_params:
         for lr in optimizer_config['lr']:
             print()
             print(f"Training with optimizer {optimizer_config['name']} and learning rate {lr}")
             model_copy = copy.deepcopy(model).to(device)  # The model remains the same
-            if config['training_params']['compile']:
+            if training_params['compile']:
                 print("Compiling model")
                 model_copy = torch.compile(model_copy)
                 
@@ -58,9 +63,8 @@ def main(config_file=None):
                 optimizer = optimizer_obj(params=model_copy.parameters(), **hyperp)
             total_iterations = training_params['num_epochs'] * len(train_dataloader)
             scheduler = get_scheduler(optimizer_config, optimizer, total_iterations=total_iterations)
-
             # Train
-            output = train(tokenizer, train_dataloader, test_dataloader, model_copy, optimizer, training_params, device=device, scheduler=scheduler)
+            output = train(train_dataloader, val_dataloader, model_copy, optimizer, training_params, device=device, scheduler=scheduler)
 
             # Save
             output['name'] = optimizer_config['name'] + '-lr-' + str(lr)
