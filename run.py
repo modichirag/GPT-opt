@@ -57,10 +57,8 @@ def main(config_file=None):
                 model_copy = torch.compile(model_copy)
                 
             optimizer_obj, hyperp = get_optimizer(optimizer_config, lr=lr)
-            if 'muon' in optimizer_config['name']: # muon needs named params to split b/w muon and adamW
-                optimizer = optimizer_obj(named_params=model_copy.named_parameters(), **hyperp)
-            else:
-                optimizer = optimizer_obj(params=model_copy.parameters(), **hyperp)
+            p = model_copy.named_parameters() if 'muon' in optimizer_config['name'] else model_copy.parameters()
+            optimizer = optimizer_obj(p, **hyperp)
             total_iterations = training_params['num_epochs'] * len(train_dataloader)
             scheduler = get_scheduler(optimizer_config, optimizer, total_iterations=total_iterations)
             # Train
