@@ -4,7 +4,24 @@ import random
 import yaml
 import hashlib
 import json
+import torch.distributed as dist
+import os
 
+# get worker info for distributed training
+def get_worker_info():
+    if dist.is_initialized():
+        rank = int(os.environ['RANK'])
+        world_size = int(os.environ['WORLD_SIZE'])
+        local_rank = int(os.environ.get("LOCAL_RANK", rank))
+        device = f'cuda:{local_rank}'
+    else:
+        rank = 0
+        local_rank = 0
+        world_size = 1
+        master_process = True
+        device = "cuda" if torch.cuda.is_available() else "cpu"
+    return world_size, rank, local_rank, device
+        
 
 def hash_config(optimizer_config, training_params, gpt_model):
     """
