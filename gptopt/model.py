@@ -32,11 +32,11 @@ def load_model(config, device):
 
     if 'model_name' in config['gpt_model']:
         print(f"Loading model {config['gpt_model']['model_name']} and ignoring other configurations if specified")
-        model = AutoModelForCausalLM.from_pretrained(config['gpt_model']['model_name'], device_map="auto").to(device)
+        model = AutoModelForCausalLM.from_pretrained(config['gpt_model']['model_name'], device_map="auto")#.to(device)
         if not config['gpt_model']['pretrained']:
             model_config = model.config
             del model
-            model = GPT2LMHeadModel(model_config).to(device)
+            model = GPT2LMHeadModel(model_config)#.to(device)
         else:
             print("Using pre-trained version")
             
@@ -48,6 +48,6 @@ def load_model(config, device):
             n_head=gpt_config['n_head'],    
             vocab_size=gpt_config['vocab_size'], 
         )
-        model = GPT2LMHeadModel(model_config).to(device)   # Initialize a new model with random weights using this configuration
+        model = GPT2LMHeadModel(model_config)#.to(device)   # Initialize a new model with random weights using this configuration
     return model
 

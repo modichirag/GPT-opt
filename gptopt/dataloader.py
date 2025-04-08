@@ -5,6 +5,7 @@ import os
 import torch
 from torch.utils.data import IterableDataset
 import torch.distributed as dist
+from .utils import get_worker_info
 
 magic_number = 20250401         # used in the header of saved binary files
 DATA_DIR = "/mnt/ceph/users/cmodi/huggingface/"
@@ -35,17 +36,7 @@ class ShardedDataLoader(IterableDataset):
         self.split = split
         assert split in ('train', 'val')
         self.device = device
-
-        # get worker info for distributed training
-        if dist.is_initialized():
-            self.rank = dist.get_rank()           # Global rank of the process
-            self.world_size = dist.get_world_size()  # Total number of processes
-            self.local_rank = int(os.environ.get("LOCAL_RANK", self.rank))
-            print(f"Global Rank: {self.rank}, World Size: {self.world_size}, Local Rank: {self.local_rank}")
-        else:
-            print("Distributed package is not initialized.")
-            self.rank = 0
-            self.world_size = 1
+        self.world_size, self.rank, self.local_rank, self.device = get_worker_info()
         
         # get shards
         file_list = os.listdir(self.data_path)
@@ -54,13 +45,19 @@ class ShardedDataLoader(IterableDataset):
         self.n_shards = len(self.shards)
         self.get_length()
         self.reset()
+        print(f"Initialized dataloader in {self.rank} at : ", self.get_state())
         
     def reset(self):
         self.current_shard = 0
         self.current_position = self.B * self.T * self.rank
         self.tokens = load_data_shard(self.shards[self.current_shard], self.device)
 
-
+    def get_state(self):
+        return {'rank': self.rank,
+                'position': self.current_position,
+                'shard': self.current_shard
+                }
+    
     def get_length(self):
         tokens = load_data_shard(self.shards[-1], self.device)
         self.size = int(1e8*(self.n_shards - 1) + len(tokens))
@@ -85,12 +82,6 @@ class ShardedDataLoader(IterableDataset):
             self.tokens = load_data_shard(self.shards[self.current_shard], self.device)
             self.current_position = B * T * self.rank
         return x, y
-
-    def get_state(self):
-        return {'rank': self.rank,
-                'position': self.current_position,
-                'shard': self.current_shard
-                }
 
     def __iter__(self):
         while True:
