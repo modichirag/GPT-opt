@@ -1,0 +1,47 @@
+# config.yaml
+optimizer_params:
+  - name: adam
+    lr: [0.00005]
+    weight_decay: 0
+    lr_schedule: constant
+
+  # - name: momo-adam
+  #   lr: [0.00005]
+  #   weight_decay: 0
+  #   lb: 2.5
+  #   lr_schedule: constant
+
+  # - name: sgd-m
+  #   lr: [0.00005,  0.0001,  0.0005]
+  #   weight_decay: 0
+  #   momentum: 0.9
+  #   dampening: 0.9
+  #   lr_schedule: warm-up-cosine
+  #   warm_up_percent: 0.2
+
+  # - name: muon
+  #   lr: [0.001]
+  #   weight_decay: 0
+  #   lr_schedule: constant
+
+training_params:
+  batch_size: 32
+  num_epochs: 2
+  context_length: 1024
+  gradnorm: 1.0
+  matmul_precision: high   #Can be highest, high, or medium
+  autocast: True
+  mixed_precision: bfloat16
+  compile: True
+
+gpt_model:
+  model_name: "gpt2"  # If specified, it ignores explicit parameters specified below and loads this model name. 
+  pretrained: False
+  tokenizer: "gpt2"
+  # n_embd: 768    # Hidden size used in gpt2
+  # n_layer: 2    # Number of layers in gpt2
+  # n_head: 4    # Number of attention heads in gpt2
+  # vocab_size: 50304
+
+dataset:
+  name: "finewebmini"
