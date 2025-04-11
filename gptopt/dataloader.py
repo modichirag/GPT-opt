@@ -45,7 +45,7 @@ class ShardedDataLoader(IterableDataset):
         self.n_shards = len(self.shards)
         self.get_length()
         self.reset()
-        print(f"Initialized dataloader in {self.rank} at : ", self.get_state())
+        print(f"Initialized {split} dataloader in {self.rank} at : ", self.get_state())
         
     def reset(self):
         self.current_shard = 0
@@ -71,13 +71,14 @@ class ShardedDataLoader(IterableDataset):
         buf = self.tokens[self.current_position: self.current_position + B*T+1]
         x = (buf[:-1]).view(B, T).to(device=self.device, dtype=torch.int64, non_blocking=True) # inputs
         y = (buf[1:]).view(B, T).to(device=self.device, dtype=torch.int64, non_blocking=True) # targets
-        self.current_position += B*T*self.world_size
+        self.current_position += B * T * self.world_size
         # move to next shard if next iteration will be out of bounds
         # TODO -- Q. does it not leave last few tokens in each file unprocessed
         if self.current_position + (B * T * self.world_size + 1) > len(self.tokens):
             self.current_shard = (self.current_shard + 1)
             if self.current_shard >= self.n_shards:
                 self.reset()    # end current epoch and reset for next epoch
+                print(f"Rank {rank} reached end of dataloader. Resetting to : ", self.get_state())
                 raise StopIteration
             self.tokens = load_data_shard(self.shards[self.current_shard], self.device)
             self.current_position = B * T * self.rank
@@ -90,4 +91,11 @@ class ShardedDataLoader(IterableDataset):
             except StopIteration:
                 break  # End of epoch: exit the loop gracefully
             yield batch
+        
+    # def __next__(self):
+    #     try:
+    #         batch = self.next_batch()
+    #     except StopIteration:
+    #         break  # End of epoch: exit the loop gracefully
+    #     return batch
         
