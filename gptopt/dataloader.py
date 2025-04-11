@@ -50,6 +50,7 @@ class ShardedDataLoader(IterableDataset):
     def reset(self):
         self.current_shard = 0
         self.current_position = self.B * self.T * self.rank
+        self.last_token_position = self.B * self.T * self.world_size
         self.tokens = load_data_shard(self.shards[self.current_shard], self.device)
 
     def get_state(self):
@@ -65,23 +66,26 @@ class ShardedDataLoader(IterableDataset):
     def __len__(self):
         return self.size
         
+        
     def next_batch(self):
+        # Check if we can sample entire global batch from this shard
+        if self.last_token_position >= len(self.tokens):
+            if self.current_shard == self.n_shards - 1:
+                self.reset()    # end current epoch and reset for next epoch
+                print(f"Rank {self.rank} reached end of {self.split} dataloader. Resetting to : ", self.get_state())
+                raise StopIteration
+            else:
+                self.current_shard = (self.current_shard + 1)
+                self.tokens = load_data_shard(self.shards[self.current_shard], self.device)
+                self.current_position = B * T * self.rank
+                self.last_token_position =  B * T * self.world_size
+                
         B, T = self.B, self.T
-        rank, world_size = self.rank, self.world_size
         buf = self.tokens[self.current_position: self.current_position + B*T+1]
         x = (buf[:-1]).view(B, T).to(device=self.device, dtype=torch.int64, non_blocking=True) # inputs
         y = (buf[1:]).view(B, T).to(device=self.device, dtype=torch.int64, non_blocking=True) # targets
         self.current_position += B * T * self.world_size
-        # move to next shard if next iteration will be out of bounds
-        # TODO -- Q. does it not leave last few tokens in each file unprocessed
-        if self.current_position + (B * T * self.world_size + 1) > len(self.tokens):
-            self.current_shard = (self.current_shard + 1)
-            if self.current_shard >= self.n_shards:
-                self.reset()    # end current epoch and reset for next epoch
-                print(f"Rank {rank} reached end of dataloader. Resetting to : ", self.get_state())
-                raise StopIteration
-            self.tokens = load_data_shard(self.shards[self.current_shard], self.device)
-            self.current_position = B * T * self.rank
+        self.last_token_position += B * T * self.world_size
         return x, y
 
     def __iter__(self):
