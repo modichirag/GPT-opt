@@ -68,6 +68,8 @@ class ShardedDataLoader(IterableDataset):
         
         
     def next_batch(self):
+
+        B, T = self.B, self.T
         # Check if we can sample entire global batch from this shard
         if self.last_token_position >= len(self.tokens):
             if self.current_shard == self.n_shards - 1:
@@ -80,7 +82,6 @@ class ShardedDataLoader(IterableDataset):
                 self.current_position = B * T * self.rank
                 self.last_token_position =  B * T * self.world_size
                 
-        B, T = self.B, self.T
         buf = self.tokens[self.current_position: self.current_position + B*T+1]
         x = (buf[:-1]).view(B, T).to(device=self.device, dtype=torch.int64, non_blocking=True) # inputs
         y = (buf[1:]).view(B, T).to(device=self.device, dtype=torch.int64, non_blocking=True) # targets

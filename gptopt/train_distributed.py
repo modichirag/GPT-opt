@@ -80,7 +80,7 @@ def train(train_dataloader, val_dataloader, model, optimizer, training_params, s
                 for param_group in optimizer.param_groups:
                     logger.learning_rates.append(param_group['lr'])
                 logger.losses.append(loss_accum.item())
-                if ((step + 1) % 10 == 0) & master_process :
+                if ((step + 1) % 100 == 0) & master_process :
                     tps = training_params["tokens_processed"] / step_time
                     print(f"In rank: {rank}, step {step+1} of {total_iterations*grad_accum_steps}.")
                     print(f"Time taken : {step_time*1000:0.1f}ms | Tokens/s : {tps/1000:0.1f} thousand | Loss : {loss_accum.item():0.3f}")
