@@ -138,3 +138,100 @@ def load_config(default_config, config_file):
         config = yaml.safe_load(file)
     return merge_configs(default_config, config)
 
+
+
+def save_checkpoint(ckpt_dir, step, model, optimizer, loss, dataloader, scheduler=None):
+    print("Save checkpoint")
+    checkpoint = {
+        'step': step,
+        'model_state_dict': model.state_dict(),
+        'optimizer_state_dict': optimizer.state_dict(),
+        'loss': loss,
+        }
+    if scheduler is not None:
+        checkpoint['scheduler_state_dict'] = scheduler.state_dict()
+    
+    # Save the checkpoint to a file (e.g. checkpoint.pth)
+    os.makedirs(ckpt_dir, exist_ok=True)
+    torch.save(checkpoint, ckpt_dir + f'/ckpt{step}.pth')
+    with open(ckpt_dir + f'/ckpt{step}_loss.json', "w") as f:
+        json.dump({'train_loss':loss}, f)
+
+    # Gather dataloader from all ranks and save it.
+    world_size = dataloader.world_size
+    if world_size > 1:
+        dataloader_states = [None for _ in range(world_size)]
+        dist.all_gather_object(dataloader_states, dataloader.get_state())
+    else:
+        dataloader_states = [dataloader.get_state()]
+    print(dataloader_states)
+    with open(ckpt_dir + f'/ckpt{step}_dataloader.json', "w") as f:
+        json.dump(dataloader_states, f, indent=4)
+
+    # Delete old checkpoints
+    manage_checkpoint_directory(ckpt_dir)
+    
+
+def load_checkpoint():
+    # Assume the model and optimizer are already created (they should have the same structure)
+    checkpoint = torch.load('checkpoint.pth')
+
+    # Load model and optimizer states
+    model.load_state_dict(checkpoint['model_state_dict'])
+    optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
+    if scheduler is not None:
+        if 'scheduler_state_dict' in checkpoint:
+            scheduler = scheduler.load_state_dict(checkpoint['scheduler_state_dict'])
+        else:
+            print("WARNING: Scheduler dict not found in checkpoint")
+    
+    # Retrieve dataloader
+    state = checkpoint['state']
+    loss = checkpoint['loss']
+
+    with open(path + f'ckpt{step}_dataloader.json', "r") as f:
+        dataloader_states = json.load(f)
+
+    for state in dataloader:
+        if state['rank'] == dataloader.rank:
+            dataloader.set_state(state)
+
+
+def manage_checkpoint_directory(ckpt_dir, keep_last=2):
+    # List checkpoint files (assuming .pth extension)
+    ckpt_files = [os.path.join(ckpt_dir, f)
+                        for f in os.listdir(ckpt_dir)
+                        if f.endswith(".pth")]
+    loss_files = [os.path.join(ckpt_dir, f)
+                        for f in os.listdir(ckpt_dir)
+                        if f.endswith("_loss.json")]
+    
+    if not ckpt_files:
+        print("No ckpt files found.")
+        return
+                            
+    ckpt_files.sort(key=lambda f: os.path.getmtime(f), reverse=True)
+    recent_ckpts = ckpt_files[:keep_last]
+
+    best_loss = float("inf")
+    best_ckpt = None
+    
+    for file in loss_files:
+        try:
+            with open(file, "r") as f:
+                loss = json.load(f)['train_loss']
+            if loss < best_loss:
+                best_loss = loss
+                best_ckpt = file.split("_loss")[0] + ".pth"
+        except Exception as e:
+            print(f"Could not load loss from {file}: {e}")
+
+    # Build a set of files to keep: recent ones plus the best-loss one.
+    to_keep = set(recent_ckpts)
+    if best_ckpt is not None:
+        to_keep.add(best_ckpt)
+    
+    # Delete any ckpt file not in the set to_keep.
+    for file in ckpt_files:
+        if file not in to_keep:
+            os.remove(file)
