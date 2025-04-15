@@ -6,13 +6,15 @@ from gptopt.train_distributed import train
 from gptopt.optim.utils import get_scheduler, get_optimizer
 from gptopt.utils import hash_config, set_seed, get_worker_info
 from gptopt.utils import get_default_config, load_config
-from gptopt.model import load_model, load_model_karpathy
+from gptopt.model import load_model, load_model_flash
 from gptopt.dataloader import DATA_DIR, ShardedDataLoader
 from torch.nn.parallel import DistributedDataParallel as DDP
 import torch.distributed as dist
 import copy 
 import json
 import os
+
+CKPT_DIR = "/mnt/ceph/users/cmodi/gptopt/"
 
 parser = argparse.ArgumentParser(description='Train GPT-2 with optional config file.')
 parser.add_argument('--config', type=str, help='Path to config file', default=None)
@@ -36,15 +38,18 @@ config_file = args.config
 config = load_config(get_default_config(), config_file)
 outputname = config_file.replace("configs/","").replace('.yaml','')
 output_dir = f"gptopt/outputs/{outputname}"
+ckpt_dir = CKPT_DIR + f"/{outputname}/"
 if master_process:
     print(f"Loading configuration from {config_file}")
     print(f"Training on dataset {config['dataset']['name']}")
     os.makedirs(output_dir, exist_ok=True)  
+    os.makedirs(ckpt_dir, exist_ok=True)  
 
 # Load model
 if config['gpt_model']['flash_attention']:
     model = load_model_flash(config, device, flash_attention=True)
     hface_model = False
+    print("Using local model with flash attention")
 else:
     model = load_model(config, device)
     hface_model = True
@@ -64,16 +69,23 @@ val_dataloader = ShardedDataLoader(dataset_path, B, T, "val", device)
 total_iterations = int(training_params['num_epochs'] * len(train_dataloader) / training_params['tokens_processed'])
 if master_process:
     print(f"Length of train dataset : {len(train_dataloader)/1e6:0.1f} million tokens")
-    print(f"Length of val dataset : {len(val_dataloader)/1e6:0.1f} million tokens")
+    print(f"Length of validation dataset : {len(val_dataloader)/1e6:0.1f} million tokens")
     print(f"Total number of iterations : {total_iterations}")
 
+
 # Loop over optimizers
-for optimizer_config in list_optimizer_params:
-    for lr in optimizer_config['lr']:
+for opt_config in list_optimizer_params:
+    for lr in opt_config['lr']:
         print()
         if master_process:
-            print(f"Training with optimizer {optimizer_config['name']} and learning rate {lr}")
-
+            print(f"Training with optimizer {opt_config['name']} and learning rate {lr}")
+            # Generate hash for the current optimizer configuration
+            config_hash = hash_config(opt_config, training_params, config['gpt_model'])
+            file_name = f"{opt_config['name']}-lr-{lr}-{opt_config['lr_schedule']}-{config_hash}-world{world_size}"
+            if args.suffix != '': file_name += f"-{args.suffix}"
+            output_path = os.path.join(output_dir, file_name + '.json')
+            ckpt_dir = os.path.join(ckpt_dir, file_name) + '/'
+        
         # copy model to ensure consistency
         model_copy = copy.deepcopy(model).to(device)
         if training_params['compile']:
@@ -82,24 +94,19 @@ for optimizer_config in list_optimizer_params:
         if ddp:
             model_copy = DDP(model_copy, device_ids=[local_rank])
 
-        optimizer_obj, hyperp = get_optimizer(optimizer_config, lr=lr)
-        p = model_copy.named_parameters() if 'muon' in optimizer_config['name'] else model_copy.parameters()
+        optimizer_obj, hyperp = get_optimizer(opt_config, lr=lr)
+        p = model_copy.named_parameters() if 'muon' in opt_config['name'] else model_copy.parameters()
         optimizer = optimizer_obj(p, **hyperp)
-        scheduler = get_scheduler(optimizer_config, optimizer, total_iterations=total_iterations)
+        scheduler = get_scheduler(opt_config, optimizer, total_iterations=total_iterations)
         
         # Train
         logger = train(train_dataloader, val_dataloader, model_copy,
                        optimizer, training_params, scheduler=scheduler,
-                       hface_model=hface_model)
+                       hface_model=hface_model, ckpt_dir=ckpt_dir)
 
         # Save
         if master_process:
-            logger.name = optimizer_config['name'] + '-lr-' + str(lr)
-            # Generate hash for the current optimizer configuration
-            config_hash = hash_config(optimizer_config, training_params, config['gpt_model'])
-            file_name = f"{optimizer_config['name']}-lr-{lr}-{optimizer_config['lr_schedule']}-{config_hash}-world{world_size}"
-            if args.suffix != '': file_name += f"-{args.suffix}"
-            output_path = os.path.join(output_dir, file_name + '.json')
+            logger.name = opt_config['name'] + '-lr-' + str(lr)
             if os.path.exists(output_path):
                 print(f"File {output_path} already exists. Overwriting")
             with open(output_path, 'w') as file:
