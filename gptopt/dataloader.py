@@ -58,10 +58,21 @@ class ShardedDataLoader(IterableDataset):
                 'position': self.current_position,
                 'shard': self.current_shard
                 }
-    
+
+    def set_state(self, state):
+        assert self.rank == state['rank']
+        self.current_position = state['position']
+        self.current_shard = state['shard']
+            
     def get_length(self):
-        tokens = load_data_shard(self.shards[-1], self.device)
-        self.size = int(1e8*(self.n_shards - 1) + len(tokens))
+        tokens = load_data_shard(self.shards[0], self.device)
+        base_length = len(tokens)
+        if self.n_shards == 1:
+            self.size = int(base_length)
+        else:
+            # assumes all shards except last are of same length
+            tokens = load_data_shard(self.shards[-1], self.device)
+            self.size = int(base_length*(self.n_shards - 1) + len(tokens))
 
     def __len__(self):
         return self.size
