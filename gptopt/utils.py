@@ -124,7 +124,7 @@ def get_default_config():
     }
     return default_config
 
-    # Function to recursively merge dictionaries
+# Function to recursively merge dictionaries
 def merge_configs(default_config, user_config):
     for key, value in default_config.items():
         if key not in user_config:

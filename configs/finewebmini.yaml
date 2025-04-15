@@ -1,12 +1,12 @@
 # config.yaml
 optimizer_params:
   - name: adam
-    lr: [0.0005]
+    lr: [0.0001, 0.0005, 0.001]
     weight_decay: 0
     lr_schedule: constant
 
   - name: momo-adam
-    lr: [0.0005]
+    lr: [0.0001, 0.0005, 0.001]
     weight_decay: 0
     lb: 2.5
     lr_schedule: constant
@@ -20,7 +20,7 @@ optimizer_params:
   #   warm_up_percent: 0.2
 
   - name: muon
-    lr: [0.001]
+    lr: [0.0001, 0.0005, 0.001]
     weight_decay: 0
     lr_schedule: constant
 
@@ -30,7 +30,7 @@ training_params:
   num_epochs: 1
   context_length: 1024
   gradnorm: 1.0
-  matmul_precision: high   #Can be highest, high, or medium
+  tensorcore_precision: high   #Can be highest, high, or medium
   autocast: True
   mixed_precision: bfloat16
   compile: True
@@ -39,6 +39,7 @@ gpt_model:
   model_name: "gpt2"  # If specified, it ignores explicit parameters specified below and loads this model name. 
   pretrained: False
   tokenizer: "gpt2"
+  flash_attention: False
   # n_embd: 768    # Hidden size used in gpt2
   # n_layer: 2    # Number of layers in gpt2
   # n_head: 4    # Number of attention heads in gpt2

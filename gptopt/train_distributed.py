@@ -14,9 +14,9 @@ class Logging():
         self.learning_rates = []
         self.grad_norms = []
         self.step_times = []
-
+   
         
-def train(train_dataloader, val_dataloader, model, optimizer, training_params, scheduler=None):
+def train(train_dataloader, val_dataloader, model, optimizer, training_params, scheduler=None, hface_model=False):
     world_size, rank, local_rank, device  = get_worker_info()
     master_process = (rank == 0)
     logger = Logging()
@@ -26,7 +26,7 @@ def train(train_dataloader, val_dataloader, model, optimizer, training_params, s
     else:
         pass_loss = False
     if master_process: print(f"Set pass_loss to {pass_loss} for optimizer {optimizer_name}")
-    
+
     ctxt = contextlib.nullcontext()
     if training_params['autocast']:
         ctxt = torch.autocast(device_type=device, dtype=typedict[training_params['mixed_precision']]) 
@@ -35,9 +35,7 @@ def train(train_dataloader, val_dataloader, model, optimizer, training_params, s
     grad_accum_steps = int(training_params['tokens_processed'] / (world_size*B*T))
     if master_process: print(f"Accumulate gradient for {grad_accum_steps} steps")
     total_iterations = int(training_params['num_epochs'] * len(train_dataloader) / training_params['tokens_processed'])
-
-    if 'gradnorm' in training_params: max_grad_norm = training_params['gradnorm']    
-    else: max_grad_norm = float('inf')
+    max_grad_norm = training_params['gradnorm'] if training_params['gradnorm'] != 0. else float('inf')
 
     # Training loop
     for epoch in range(training_params['num_epochs']):
@@ -52,7 +50,10 @@ def train(train_dataloader, val_dataloader, model, optimizer, training_params, s
         for step, batch in enumerate(train_dataloader):
             
             with ctxt:
-                loss = model(batch[0], labels=batch[0]).loss
+                if hface_model:
+                     loss = model(batch[0], labels=batch[0]).loss
+                else:
+                     loss = model(batch[0], batch[1], return_logits=False)[1]
                 loss /= grad_accum_steps
             loss_accum += loss.detach()
                 
@@ -96,7 +97,10 @@ def train(train_dataloader, val_dataloader, model, optimizer, training_params, s
         with torch.no_grad():
             for _, batch in enumerate(val_dataloader):
                 with ctxt:
-                    val_loss += model(batch[0], labels=batch[0]).loss.item()
+                    if hface_model:
+                        val_loss += model(batch[0], labels=batch[0]).loss.item()
+                    else:
+                        val_loss += model(batch[0], batch[1], return_logits=False)[1]
                 counter += 1
         if counter: val_loss /= counter
         val_loss = torch.tensor(val_loss, device=device)

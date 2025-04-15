@@ -6,7 +6,7 @@ from gptopt.train_distributed import train
 from gptopt.optim.utils import get_scheduler, get_optimizer
 from gptopt.utils import hash_config, set_seed, get_worker_info
 from gptopt.utils import get_default_config, load_config
-from gptopt.model import load_model
+from gptopt.model import load_model, load_model_karpathy
 from gptopt.dataloader import DATA_DIR, ShardedDataLoader
 from torch.nn.parallel import DistributedDataParallel as DDP
 import torch.distributed as dist
@@ -16,6 +16,8 @@ import os
 
 parser = argparse.ArgumentParser(description='Train GPT-2 with optional config file.')
 parser.add_argument('--config', type=str, help='Path to config file', default=None)
+parser.add_argument('--suffix', type=str, help='Path to config file', default='')
+args = parser.parse_args()
 set_seed(42)
 
 # First set up DDP
@@ -26,12 +28,11 @@ if ddp:
     dist.init_process_group(backend='nccl')
 world_size, rank, local_rank, device = get_worker_info()
 master_process = (rank == 0) # this process will do logging, checkpointing etc.
-torch.cuda.set_device(device)
 device_type = "cuda" if device.startswith("cuda") else "cpu"
 print(f"Using device: {device}")
 
 # Parse config
-config_file = parser.parse_args().config
+config_file = args.config
 config = load_config(get_default_config(), config_file)
 outputname = config_file.replace("configs/","").replace('.yaml','')
 output_dir = f"gptopt/outputs/{outputname}"
@@ -41,13 +42,17 @@ if master_process:
     os.makedirs(output_dir, exist_ok=True)  
 
 # Load model
-model = load_model(config, device)
-
+if config['gpt_model']['flash_attention']:
+    model = load_model_flash(config, device, flash_attention=True)
+    hface_model = False
+else:
+    model = load_model(config, device)
+    hface_model = True
+    
 # Set the training parameters
 training_params = config['training_params'] 
 list_optimizer_params = config["optimizer_params"]
-if 'matmul_precision' in training_params:
-    torch.set_float32_matmul_precision(training_params['matmul_precision'])
+torch.set_float32_matmul_precision(training_params['tensorcore_precision'])
 
 # Load data
 dataset_path = DATA_DIR + f"/{config['dataset']['name']}-{config['gpt_model']['tokenizer']}/"
@@ -58,7 +63,8 @@ train_dataloader = ShardedDataLoader(dataset_path, B, T, "train", device)
 val_dataloader = ShardedDataLoader(dataset_path, B, T, "val", device)
 total_iterations = int(training_params['num_epochs'] * len(train_dataloader) / training_params['tokens_processed'])
 if master_process:
-    print(f"Length of train/val dataset : {len(train_dataloader)/1e6:0.1f}/{len(val_dataloader)/1e6:0.1f} million tokens")
+    print(f"Length of train dataset : {len(train_dataloader)/1e6:0.1f} million tokens")
+    print(f"Length of val dataset : {len(val_dataloader)/1e6:0.1f} million tokens")
     print(f"Total number of iterations : {total_iterations}")
 
 # Loop over optimizers
@@ -82,15 +88,18 @@ for optimizer_config in list_optimizer_params:
         scheduler = get_scheduler(optimizer_config, optimizer, total_iterations=total_iterations)
         
         # Train
-        logger = train(train_dataloader, val_dataloader, model_copy, optimizer, training_params, scheduler=scheduler)
+        logger = train(train_dataloader, val_dataloader, model_copy,
+                       optimizer, training_params, scheduler=scheduler,
+                       hface_model=hface_model)
 
         # Save
         if master_process:
             logger.name = optimizer_config['name'] + '-lr-' + str(lr)
             # Generate hash for the current optimizer configuration
             config_hash = hash_config(optimizer_config, training_params, config['gpt_model'])
-            file_name = f"{optimizer_config['name']}-lr-{lr}-{optimizer_config['lr_schedule']}-{config_hash}-world{world_size}.json"
-            output_path = os.path.join(output_dir, file_name)
+            file_name = f"{optimizer_config['name']}-lr-{lr}-{optimizer_config['lr_schedule']}-{config_hash}-world{world_size}"
+            if args.suffix != '': file_name += f"-{args.suffix}"
+            output_path = os.path.join(output_dir, file_name + '.json')
             if os.path.exists(output_path):
                 print(f"File {output_path} already exists. Overwriting")
             with open(output_path, 'w') as file:

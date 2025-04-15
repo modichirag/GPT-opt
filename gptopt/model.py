@@ -1,4 +1,5 @@
 from transformers import GPT2Tokenizer, GPT2LMHeadModel, GPT2Config, AutoTokenizer, AutoModelForCausalLM
+from .gpt_model import GPT, GPTConfig
 
 def load_model_and_tokenizer(config, device):
 
@@ -49,5 +50,10 @@ def load_model(config, device):
             vocab_size=gpt_config['vocab_size'], 
         )
         model = GPT2LMHeadModel(model_config)#.to(device)   # Initialize a new model with random weights using this configuration
+    return model
+
+
+def load_model_flash(config, device, flash_attention=True):
+    model = GPT(GPTConfig(), device, flash_attention=flash_attention)
     return model
 
