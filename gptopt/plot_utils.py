@@ -78,3 +78,44 @@ def plot_step_size_and_lr(ax, outputs, colormap, linestylemap, lr_ranges, alpha_
             plotted_methods.add(name)
 
         return plotted_methods
+
+
+## Plotting related functions
+def smoothen_curve_batch(data, num_points):
+    smooth_data =[data[0]]
+    t =0
+    data_av = 0.0
+    total_iterations = len(data)
+    av_interval = max(1, total_iterations // num_points)
+
+    for count, item in enumerate(data, start=0): 
+        data_av = data_av*t/(t+1) + item*(1/(t+1))
+        t = t+1
+        if count % av_interval == 0:
+            smooth_data.append(data_av)
+            data_av =0.0
+            t=0.0
+    return smooth_data
+
+def smoothen_curve_exp(data, num_points, beta=0.05):
+    smooth_data =[data[0]]
+    data_av = data[0]
+    total_iterations = len(data)
+    av_interval = max(1, total_iterations // num_points)
+    for count, item in enumerate(data, start=0): 
+        if np.isnan(item):
+            continue
+        data_av = (1-beta)*data_av + beta*item
+        if count % av_interval == 0:
+            smooth_data.append(data_av)
+    return smooth_data
+
+def smoothen_dict(dict, num_points, beta= 0.05):
+    for key in dict.keys():
+        if key == 'losses':
+            dict[key] = smoothen_curve_exp(dict[key], num_points, beta = beta)
+        elif key == 'step_size_list':
+            dict[key] = smoothen_curve_exp(dict[key], len(dict[key]), beta = beta)
+        # dict[key] = smoothen_curve(dict[key], num_points)
+
+

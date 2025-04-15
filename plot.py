@@ -2,7 +2,7 @@ import yaml
 import argparse
 import matplotlib.pyplot as plt
 from matplotlib.ticker import ScalarFormatter
-from gptopt.utils import smoothen_dict, get_default_config, load_config
+from gptopt.plot_utils import smoothen_dict, get_default_config, load_config
 from gptopt.plot_utils import get_alpha_from_lr, percentage_of_epoch, plot_data, plot_step_size_and_lr
 import copy
 import json
@@ -25,7 +25,7 @@ def load_outputs(output_dir):
                 outputs.append(output)
     return outputs
 
-def plot_final_loss_vs_lr(outputs, colormap, outfilename, test=False):
+def plot_final_loss_vs_lr(outputs, colormap, outfilename, val=False):
     """Plot final loss versus learning rate as lines for each method."""
     fig, ax = plt.subplots(figsize=(6, 4))
     methods = {}
@@ -34,10 +34,10 @@ def plot_final_loss_vs_lr(outputs, colormap, outfilename, test=False):
     for output in outputs:
         name, lr = output['name'].split('-lr-')
         lr = float(lr)
-        if test:
-            if 'test_losses' not in output:
+        if val:
+            if 'val_losses' not in output:
                 continue
-            final_loss = output['test_losses'][-1]
+            final_loss = output['val_losses'][-1]
         else:
             final_loss = output['losses'][-1]  # Get the final loss
         if name not in methods:
@@ -54,9 +54,9 @@ def plot_final_loss_vs_lr(outputs, colormap, outfilename, test=False):
 
     ax.set_xscale('log')
     ax.set_xlabel('Learning Rate')
-    if test:
-        ax.set_ylabel('Final Test Loss')
-        plotfile = 'figures/' + outfilename + '-lr-sens'  + '-test' + '.pdf'
+    if val:
+        ax.set_ylabel('Final Validation Loss')
+        plotfile = 'figures/' + outfilename + '-lr-sens'  + '-val' + '.pdf'
     else:
         ax.set_ylabel('Final Loss')
         plotfile = 'figures/' + outfilename + '-lr-sens' + '.pdf'
@@ -110,7 +110,7 @@ def main(config_file=None):
 
     # Plot final loss vs learning rate
     plot_final_loss_vs_lr(outputs, colormap, outfilename)
-    plot_final_loss_vs_lr(outputs, colormap, outfilename, test=True)
+    plot_final_loss_vs_lr(outputs, colormap, outfilename, val=True)
     # Plot loss
     initial_loss = outputs[0]['losses'][0] if outputs and 'losses' in outputs[0] else 1.0  # Default to 1.0 if not available
     upper_bound = initial_loss * 1.2  # Set upper bound to 20% above the initial loss
