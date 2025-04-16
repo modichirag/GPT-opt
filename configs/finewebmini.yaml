@@ -25,8 +25,9 @@ optimizer_params:
     lr_schedule: constant
 
 training_params:
-  tokens_processed: 524288 # 2^19
-  batch_size: 64
+  tokens_processed: 262144 # 2^18 #131072 # 2^17 # 524288 # 2^19
+  val_tokens_processed: 8388608 #2^23
+  batch_size: 32
   num_epochs: 1
   context_length: 1024
   gradnorm: 1.0
@@ -35,11 +36,18 @@ training_params:
   mixed_precision: bfloat16
   compile: True
 
+logging_params:
+  val_tokens_processed: 8388608 #2^23
+  log_step: 20
+  val_step: 50
+  save_ckpt_step: 100
+  load_ckpt_step: 700
+
 gpt_model:
   model_name: "gpt2"  # If specified, it ignores explicit parameters specified below and loads this model name. 
   pretrained: False
   tokenizer: "gpt2"
-  flash_attention: False
+  flash_attention: True
   # n_embd: 768    # Hidden size used in gpt2
   # n_layer: 2    # Number of layers in gpt2
   # n_head: 4    # Number of attention heads in gpt2

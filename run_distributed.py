@@ -49,7 +49,7 @@ if master_process:
 if config['gpt_model']['flash_attention']:
     model = load_model_flash(config, device, flash_attention=True)
     hface_model = False
-    print("Using local model with flash attention")
+    if master_process: print("Using local model with flash attention")
 else:
     model = load_model(config, device)
     hface_model = True
@@ -72,19 +72,19 @@ if master_process:
     print(f"Length of validation dataset : {len(val_dataloader)/1e6:0.1f} million tokens")
     print(f"Total number of iterations : {total_iterations}")
 
-
 # Loop over optimizers
 for opt_config in list_optimizer_params:
     for lr in opt_config['lr']:
         print()
         if master_process:
             print(f"Training with optimizer {opt_config['name']} and learning rate {lr}")
-            # Generate hash for the current optimizer configuration
-            config_hash = hash_config(opt_config, training_params, config['gpt_model'])
-            file_name = f"{opt_config['name']}-lr-{lr}-{opt_config['lr_schedule']}-{config_hash}-world{world_size}"
-            if args.suffix != '': file_name += f"-{args.suffix}"
-            output_path = os.path.join(output_dir, file_name + '.json')
-            ckpt_dir = os.path.join(ckpt_dir, file_name) + '/'
+            
+        # Generate hash for the current optimizer configuration
+        config_hash = hash_config(opt_config, training_params, config['gpt_model'])
+        file_name = f"{opt_config['name']}-lr-{lr}-{opt_config['lr_schedule']}-{config_hash}-world{world_size}"
+        if args.suffix != '': file_name += f"-{args.suffix}"
+        output_path = os.path.join(output_dir, file_name + '.json')
+        ckpt_dir = os.path.join(ckpt_dir, file_name) + '/'
         
         # copy model to ensure consistency
         model_copy = copy.deepcopy(model).to(device)
@@ -94,15 +94,16 @@ for opt_config in list_optimizer_params:
         if ddp:
             model_copy = DDP(model_copy, device_ids=[local_rank])
 
+        # Setup optimizer
         optimizer_obj, hyperp = get_optimizer(opt_config, lr=lr)
         p = model_copy.named_parameters() if 'muon' in opt_config['name'] else model_copy.parameters()
         optimizer = optimizer_obj(p, **hyperp)
         scheduler = get_scheduler(opt_config, optimizer, total_iterations=total_iterations)
         
         # Train
-        logger = train(train_dataloader, val_dataloader, model_copy,
-                       optimizer, training_params, scheduler=scheduler,
-                       hface_model=hface_model, ckpt_dir=ckpt_dir)
+        logger = train(train_dataloader, val_dataloader, model_copy, optimizer, training_params,
+                       scheduler=scheduler, hface_model=hface_model, ckpt_dir=ckpt_dir,
+                       logging_params=config['logging_params'])
 
         # Save
         if master_process:
