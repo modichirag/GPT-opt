@@ -141,7 +141,8 @@ def load_config(default_config, config_file):
 
 
 def save_checkpoint(ckpt_dir, step, model, optimizer, loss, dataloader, scheduler=None):
-    print("Save checkpoint")
+    world_size = dataloader.world_size
+    master_process = (dataloader.rank == 0)
     checkpoint = {
         'step': step,
         'model_state_dict': model.state_dict(),
@@ -151,30 +152,33 @@ def save_checkpoint(ckpt_dir, step, model, optimizer, loss, dataloader, schedule
     if scheduler is not None:
         checkpoint['scheduler_state_dict'] = scheduler.state_dict()
     
-    # Save the checkpoint to a file (e.g. checkpoint.pth)
-    os.makedirs(ckpt_dir, exist_ok=True)
-    torch.save(checkpoint, ckpt_dir + f'/ckpt{step}.pth')
-    with open(ckpt_dir + f'/ckpt{step}_loss.json', "w") as f:
-        json.dump({'train_loss':loss}, f)
-
     # Gather dataloader from all ranks and save it.
-    world_size = dataloader.world_size
     if world_size > 1:
         dataloader_states = [None for _ in range(world_size)]
-        dist.all_gather_object(dataloader_states, dataloader.get_state())
+        state = dataloader.get_state()
+        dist.all_gather_object(dataloader_states, state)
     else:
         dataloader_states = [dataloader.get_state()]
-    print(dataloader_states)
-    with open(ckpt_dir + f'/ckpt{step}_dataloader.json', "w") as f:
-        json.dump(dataloader_states, f, indent=4)
+    
+    # Save the checkpoint and daaloader to a file (e.g. checkpoint.pth)
+    if master_process:
+        print("Save checkpoint")
+        os.makedirs(ckpt_dir, exist_ok=True)
+        torch.save(checkpoint, ckpt_dir + f'/ckpt{step}.pth')
+        with open(ckpt_dir + f'/ckpt{step}_loss.json', "w") as f:
+            json.dump({'train_loss':loss}, f)
 
-    # Delete old checkpoints
-    manage_checkpoint_directory(ckpt_dir)
+        with open(ckpt_dir + f'/ckpt{step}_dataloader.json', "w") as f:
+            json.dump(dataloader_states, f, indent=4)
+
+        # Delete old checkpoints
+        manage_checkpoint_directory(ckpt_dir)
     
 
-def load_checkpoint():
+def load_checkpoint(ckpt_dir, step, model, optimizer, dataloader, scheduler=None):
     # Assume the model and optimizer are already created (they should have the same structure)
-    checkpoint = torch.load('checkpoint.pth')
+    print(f"Loading checkpoint {ckpt_dir + f'/ckpt{step}.pth'}")
+    checkpoint = torch.load(ckpt_dir + f'/ckpt{step}.pth')
 
     # Load model and optimizer states
     model.load_state_dict(checkpoint['model_state_dict'])
@@ -185,16 +189,15 @@ def load_checkpoint():
         else:
             print("WARNING: Scheduler dict not found in checkpoint")
     
-    # Retrieve dataloader
-    state = checkpoint['state']
-    loss = checkpoint['loss']
-
-    with open(path + f'ckpt{step}_dataloader.json', "r") as f:
+    print("Loss at checkpoint : {checkpoint['loss']}")
+    with open(ckpt_dir + f'/ckpt{step}_dataloader.json', "r") as f:
         dataloader_states = json.load(f)
 
-    for state in dataloader:
+    for state in dataloader_states:
         if state['rank'] == dataloader.rank:
             dataloader.set_state(state)
+
+    return model, optimizer, dataloader, scheduler
 
 
 def manage_checkpoint_directory(ckpt_dir, keep_last=2):
