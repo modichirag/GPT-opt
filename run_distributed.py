@@ -74,7 +74,9 @@ for opt_config in list_optimizer_params:
             print(f"Training with optimizer {opt_config['name']} and learning rate {lr}")
             
         # Generate hash for the current optimizer configuration
-        config_hash = hash_config(opt_config, training_params, config['gpt_model'])
+        opt_config_copy = copy.deepcopy(opt_config)
+        opt_config_copy['lr'] = lr
+        config_hash = hash_config(opt_config_copy, training_params, config['gpt_model'])
         file_name = f"{opt_config['name']}-lr-{lr}-{opt_config['lr_schedule']}-{config_hash}-world{world_size}"
         if args.suffix != '': file_name += f"-{args.suffix}"
         output_path = os.path.join(output_dir, file_name + '.json')
