@@ -140,7 +140,7 @@ def load_config(default_config, config_file):
 
 
 
-def save_checkpoint(ckpt_dir, step, model, optimizer, loss, dataloader, scheduler=None):
+def save_checkpoint(ckpt_dir, step, model, optimizer, loss, dataloader, scheduler=None, keep_last=2):
     world_size = dataloader.world_size
     master_process = (dataloader.rank == 0)
     checkpoint = {
@@ -172,7 +172,7 @@ def save_checkpoint(ckpt_dir, step, model, optimizer, loss, dataloader, schedule
             json.dump(dataloader_states, f, indent=4)
 
         # Delete old checkpoints
-        manage_checkpoint_directory(ckpt_dir)
+        manage_checkpoint_directory(ckpt_dir, keep_last)
     
 
 def load_checkpoint(ckpt_dir, step, model, optimizer, dataloader, scheduler=None):

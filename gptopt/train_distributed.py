@@ -112,7 +112,8 @@ def train(train_dataloader, val_dataloader, model, optimizer, training_params, l
                     
                 if (step % logging_params['save_ckpt_step'] == 0):
                     save_checkpoint(ckpt_dir, step, model, optimizer, loss_accum.item(),
-                                    train_dataloader, scheduler)
+                                    train_dataloader, scheduler, logging_params['keep_last'])
+                    
                     if master_process:
                         with open(ckpt_dir + '/log.json', 'w') as file:
                             json.dump(logger.__dict__, file)
