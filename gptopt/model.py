@@ -29,7 +29,7 @@ def load_model_and_tokenizer(config, device):
     return model, tokenizer
 
 
-def load_model(config, device):
+def load_model_huggingface(config, device):
 
     if 'model_name' in config['gpt_model']:
         print(f"Loading model {config['gpt_model']['model_name']} and ignoring other configurations if specified")
@@ -53,7 +53,13 @@ def load_model(config, device):
     return model
 
 
-def load_model_flash(config, device, flash_attention=True):
-    model = GPT(GPTConfig(), device, flash_attention=flash_attention)
+def load_model(config, device):
+    gptconfig = GPTConfig()
+    print(config)
+    gptconfig.n_embd = config['n_embd']
+    gptconfig.n_layer = config['n_layer']
+    gptconfig.n_head = config['n_head']
+    gptconfig.vocab_size = config['vocab_size']
+    model = GPT(gptconfig, device, flash_attention=config['flash_attention'])
     return model
 

@@ -17,7 +17,7 @@ class Logging():
         self.step_times = []
 
 
-def train(train_dataloader, val_dataloader, model, optimizer, training_params, logging_params, scheduler=None, hface_model=False, ckpt_dir=None):
+def train(train_dataloader, val_dataloader, model, optimizer, training_params, logging_params, scheduler=None, ckpt_dir=None):
     
     world_size, rank, local_rank, device  = get_worker_info()
     master_process = (rank == 0)
@@ -44,7 +44,6 @@ def train(train_dataloader, val_dataloader, model, optimizer, training_params, l
         model, optimizer, train_dataloader, scheduler = load_checkpoint(ckpt_dir, load_ckpt_step, model, \
                                                         optimizer, train_dataloader, scheduler=None)
         
-        
     # Training loop
     for epoch in range(training_params['num_epochs']):
         if master_process:
@@ -59,10 +58,7 @@ def train(train_dataloader, val_dataloader, model, optimizer, training_params, l
         if step != 1: print(train_dataloader.get_state())
         for batch in train_dataloader:            
             with autocast_ctxt:
-                if hface_model:
-                     loss = model(batch[0], labels=batch[0]).loss
-                else:
-                     loss = model(batch[0], batch[1], return_logits=False)[1]
+                loss = model(batch[0], batch[1], return_logits=False)[1]
                 loss /= grad_accum_steps
             loss_accum += loss.detach()
                 
@@ -104,10 +100,7 @@ def train(train_dataloader, val_dataloader, model, optimizer, training_params, l
                     with torch.no_grad():
                         for batch in val_dataloader:
                             with autocast_ctxt:
-                                if hface_model:
-                                    val_loss += model(batch[0], labels=batch[0]).loss.item()
-                                else:
-                                    val_loss += model(batch[0], batch[1], return_logits=False)[1]
+                                val_loss += model(batch[0], batch[1], return_logits=False)[1]
                             counter += 1
                             if counter >= val_accum_steps: break
                     val_loss = torch.tensor(val_loss, device=device)/val_accum_steps
@@ -137,10 +130,7 @@ def train(train_dataloader, val_dataloader, model, optimizer, training_params, l
         with torch.no_grad():
             for _, batch in enumerate(val_dataloader):
                 with autocast_ctxt:
-                    if hface_model:
-                        val_loss += model(batch[0], labels=batch[0]).loss.item()
-                    else:
-                        val_loss += model(batch[0], batch[1], return_logits=False)[1]
+                    val_loss += model(batch[0], batch[1], return_logits=False)[1]
                 counter += 1
         if counter: val_loss /= counter
         val_loss = torch.tensor(val_loss, device=device)

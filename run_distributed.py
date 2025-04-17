@@ -6,7 +6,7 @@ from gptopt.train_distributed import train
 from gptopt.optim.utils import get_scheduler, get_optimizer
 from gptopt.utils import hash_config, set_seed, get_worker_info
 from gptopt.utils import get_default_config, load_config
-from gptopt.model import load_model, load_model_flash
+from gptopt.model import load_model
 from gptopt.dataloader import DATA_DIR, ShardedDataLoader
 from torch.nn.parallel import DistributedDataParallel as DDP
 import torch.distributed as dist
@@ -46,13 +46,7 @@ if master_process:
     os.makedirs(ckpt_dir, exist_ok=True)  
 
 # Load model
-if config['gpt_model']['flash_attention']:
-    model = load_model_flash(config, device, flash_attention=True)
-    hface_model = False
-    if master_process: print("Using local model with flash attention")
-else:
-    model = load_model(config, device)
-    hface_model = True
+model = load_model(config['gpt_model'], device)
     
 # Set the training parameters
 training_params = config['training_params'] 
@@ -60,7 +54,7 @@ list_optimizer_params = config["optimizer_params"]
 torch.set_float32_matmul_precision(training_params['tensorcore_precision'])
 
 # Load data
-dataset_path = DATA_DIR + f"/{config['dataset']['name']}-{config['gpt_model']['tokenizer']}/"
+dataset_path = DATA_DIR + f"/{config['dataset']['name']}-gpt2/"
 if master_process: print(f"Load data from {dataset_path}")
 B, T = training_params['batch_size'], training_params['context_length']
 assert training_params['tokens_processed'] % (world_size * B * T) == 0 
@@ -102,7 +96,7 @@ for opt_config in list_optimizer_params:
         
         # Train
         logger = train(train_dataloader, val_dataloader, model_copy, optimizer, training_params,
-                       scheduler=scheduler, hface_model=hface_model, ckpt_dir=ckpt_dir,
+                       scheduler=scheduler, ckpt_dir=ckpt_dir,
                        logging_params=config['logging_params'])
 
         # Save

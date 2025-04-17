@@ -41,17 +41,14 @@ logging_params:
   log_step: 20
   val_step: 50
   save_ckpt_step: 100
-  load_ckpt_step: 700
+  load_ckpt_step: 0
 
 gpt_model:
-  model_name: "gpt2"  # If specified, it ignores explicit parameters specified below and loads this model name. 
-  pretrained: False
-  tokenizer: "gpt2"
+  n_embd: 768    
+  n_layer: 12   
+  n_head: 12    
+  vocab_size: 50257
   flash_attention: True
-  # n_embd: 768    # Hidden size used in gpt2
-  # n_layer: 2    # Number of layers in gpt2
-  # n_head: 4    # Number of attention heads in gpt2
-  # vocab_size: 50304
 
 dataset:
   name: "finewebmini"
