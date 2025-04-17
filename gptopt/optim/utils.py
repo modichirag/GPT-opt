@@ -196,7 +196,7 @@ def get_scheduler(config: dict, opt: torch.optim.Optimizer, total_iterations = N
         scheduler = StepLR(opt, step_size=step_size, gamma=gamma)
 
     elif 'warm-up-cosine' in name:
-        num_warmup_steps = int(config['warm_up_percent'] * total_iterations) 
+        num_warmup_steps = int(config['warm_up_fraction'] * total_iterations) 
         scheduler = get_cosine_schedule_with_warmup(
                     opt,
                     num_warmup_steps=num_warmup_steps,
