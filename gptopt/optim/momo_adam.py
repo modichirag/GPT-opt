@@ -221,7 +221,7 @@ class MomoAdam(torch.optim.Optimizer):
                     p.data.div_(1+lmbda*lr)
 
         # Append step size for the optimization step
-        self.step_size_list.append(tau)
+        self.step_size_list.append([tau, t1])
 
         #############################
         ## Maintenance
