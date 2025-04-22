@@ -58,6 +58,11 @@ class Muon(torch.optim.Optimizer):
         momentum: The momentum used by the internal SGD. (0.95 is a good default)
         nesterov: Whether to use Nesterov-style momentum in the internal SGD. (recommended)
         ns_steps: The number of Newton-Schulz iterations to run. (6 is probably always enough)
+        rms_scaling: Whether to scale each layer's LR by sqrt(fan_out/fan_in), which
+        comes from choosing the RMS norm instead of L2 norm for steepest descent.
+        nuclear_scaling: Whether to scale each layer's LR by the nuclear norm of the
+        gradient, which comes from choosing the L2 norm for the product space over
+        layers instead of the max norm.
         adamw_params: The parameters to be optimized by AdamW. Any parameters in `muon_params` which are
         {0, 1}-D or are detected as being the embed or lm_head will be optimized by AdamW as well.
         adamw_lr: The learning rate for the internal AdamW.
@@ -72,6 +77,8 @@ class Muon(torch.optim.Optimizer):
                  momentum=0.95,
                  nesterov=True,
                  ns_steps=5,
+                 rms_scaling=True,
+                 nuclear_scaling=False,
                  adamw_betas=(0.95, 0.95),
                  adamw_eps=1e-8):
             
@@ -81,6 +88,8 @@ class Muon(torch.optim.Optimizer):
                 momentum=momentum,
                 nesterov=nesterov,
                 ns_steps=ns_steps,
+                rms_scaling=rms_scaling,
+                nuclear_scaling=nuclear_scaling,
                 adamw_betas=adamw_betas,
                 adamw_eps=adamw_eps,
         )
@@ -111,11 +120,14 @@ class Muon(torch.optim.Optimizer):
                 # Do not use Muon for parameters in adamw_params
                 self.state[p]["use_muon"] = False
 
-    def adjust_lr_for_muon(self, lr, param_shape):
-        fan_out, fan_in = param_shape[:2]
-        # Rescale the learning rate by sqrt(fan-out / fan-in)
-        adjusted_lr = lr * math.sqrt(fan_out / fan_in)
-        return adjusted_lr
+    def adjust_lr_for_muon(self, lr, rms_scaling, nuclear_scaling, param_shape, grad, grad_sign):
+        scale = 1.0
+        if rms_scaling:
+            fan_out, fan_in = param_shape[:2]
+            scale *= math.sqrt(fan_out / fan_in)
+        if nuclear_scaling:
+            scale *= torch.trace(grad.T @ grad_sign)
+        return lr * scale
 
     def step(self, closure=None):
         """Perform a single optimization step.
@@ -164,7 +176,9 @@ class Muon(torch.optim.Optimizer):
                 u = zeropower_via_newtonschulz5(g, steps=group["ns_steps"])
                 
                 # scale update
-                adjusted_lr = self.adjust_lr_for_muon(lr, p.shape)
+                adjusted_lr = self.adjust_lr_for_muon(
+                    lr, group["rms_scaling"], group["nuclear_scaling"], p.shape, g, u
+                )
                 
                 # apply weight decay
                 p.data.mul_(1 - lr * wd)

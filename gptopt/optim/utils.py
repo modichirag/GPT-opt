@@ -120,7 +120,9 @@ def get_optimizer(opt_config: dict, lr = 1e-3) -> Tuple[torch.optim.Optimizer, d
                   'adamw_betas': opt_config.get('betas', (0.95, 0.95)),
                   'momentum': opt_config.get('momentum', 0.95),
                   'nesterov': True,
-                  'ns_steps': opt_config.get('ns_steps', 5)
+                  'ns_steps': opt_config.get('ns_steps', 5),
+                  'rms_scaling': opt_config.get('rms_scaling', True),
+                  'nuclear_scaling': opt_config.get('rms_scaling', False)
                   }
 
     # elif name == 'iam':
