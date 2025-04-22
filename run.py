@@ -31,7 +31,7 @@ def main(config_file=None):
         torch.set_float32_matmul_precision(config['training_params']['matmul_precision'])
 
     # Load model
-    model = load_model(config, device)
+    model = load_model(config['gpt_model'], device)
                                                    
     # Set the training parameters
     training_params = config['training_params'] 
