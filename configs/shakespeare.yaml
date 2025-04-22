@@ -35,9 +35,11 @@ logging_params:
   val_tokens_processed: 2048 #2^23
   log_step: 50
   val_step: 50
-  save_ckpt_step: 100
+  save_ckpt_step: 500
   load_ckpt_step: 0
   keep_last: 2
+  ckpt_dir: "" #/mnt/ceph/users/cmodi/gptopt/
+  
 
 gpt_model:
   n_embd: 768    
