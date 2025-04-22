@@ -79,7 +79,7 @@ def train(train_dataloader, val_dataloader, model, optimizer, training_params, l
         optimizer.zero_grad()
         if step != 1: print(train_dataloader.get_state())
         
-        for batch in train_dataloader:            
+        for batch in train_dataloader:      
             with autocast_ctxt:
                 loss = model(batch[0], batch[1], return_logits=False)[1]
                 loss /= grad_accum_steps
