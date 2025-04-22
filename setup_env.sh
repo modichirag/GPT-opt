@@ -6,7 +6,7 @@
 set -e
 
 # Create a Python virtual environment
-python3 -m venv gptopt
+python3.9 -m venv gptopt
 
 # Activate the virtual environment
 source gptopt/bin/activate

@@ -12,6 +12,7 @@ setup(
         'requests',
         'transformers',
         'datasets',
-        'accelerate'
+        'accelerate',
+        'importlib_metadata'
     ],
 )

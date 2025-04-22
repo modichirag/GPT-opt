@@ -12,14 +12,14 @@ sbatch <<EOF
 #SBATCH --constraint=a100
 #SBATCH -o output/slurm_logs/${CONFIG_NAME}.log
 
+export OMP_NUM_THREADS=1
+module load modules/2.3-20240529
 module load python
 
 # Activate environment
 source gptopt/bin/activate
 
 # Install the necessary packages
-python3 -m pip install -e .
-
-# Run the Python script with the config file
-python3 run.py --config $1
+python3.9 -m pip install -e .
+time torchrun --standalone --nproc_per_node=1 run.py --config $1
 EOF
