@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 from gptopt.train_distributed import train
 from gptopt.optim.utils import get_scheduler, get_optimizer
 from gptopt.utils import hash_config, set_seed, get_worker_info
-from gptopt.utils import get_default_config, load_config
+#from gptopt.utils import get_default_config, load_config
 from gptopt.model import load_model
 from gptopt.dataloader import DATA_DIR, ShardedDataLoader
 from torch.nn.parallel import DistributedDataParallel as DDP
@@ -35,15 +35,17 @@ print(f"Using device: {device}")
 
 # Parse config
 config_file = args.config
-config = load_config(get_default_config(), config_file)
+with open(config_file, 'r') as file:
+    config = yaml.safe_load(file)
+#config = load_config(get_default_config(), config_file)
 outputname = config_file.replace("configs/","").replace('.yaml','')
 output_dir = f"gptopt/outputs/{outputname}"
-ckpt_dir = CKPT_DIR + f"/{outputname}/"
+ckpt_dir_base = CKPT_DIR + f"/{outputname}/"
 if master_process:
     print(f"Loading configuration from {config_file}")
     print(f"Training on dataset {config['dataset']['name']}")
     os.makedirs(output_dir, exist_ok=True)  
-    os.makedirs(ckpt_dir, exist_ok=True)  
+    os.makedirs(ckpt_dir_base, exist_ok=True)  
 
 # Load model
 model = load_model(config['gpt_model'], device)
@@ -80,7 +82,7 @@ for opt_config in list_optimizer_params:
         file_name = f"{opt_config['name']}-lr-{lr}-{opt_config['lr_schedule']}-{config_hash}-world{world_size}"
         if args.suffix != '': file_name += f"-{args.suffix}"
         output_path = os.path.join(output_dir, file_name + '.json')
-        ckpt_dir = os.path.join(ckpt_dir, file_name) + '/'
+        ckpt_dir = os.path.join(ckpt_dir_base, file_name) + '/'
         
         # copy model to ensure consistency
         model_copy = copy.deepcopy(model).to(device)
@@ -112,4 +114,3 @@ for opt_config in list_optimizer_params:
 
 if ddp:
     dist.destroy_process_group()
-

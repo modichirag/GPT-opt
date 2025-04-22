@@ -2,8 +2,8 @@ import yaml
 import argparse
 import matplotlib.pyplot as plt
 from matplotlib.ticker import ScalarFormatter
-from gptopt.plot_utils import smoothen_dict, get_default_config, load_config
-from gptopt.plot_utils import get_alpha_from_lr, percentage_of_epoch, plot_data, plot_step_size_and_lr
+from gptopt.utils import get_default_config, load_config
+from gptopt.plot_utils import get_alpha_from_lr, percentage_of_epoch, plot_data, plot_step_size_and_lr, smoothen_dict
 import copy
 import json
 import os
@@ -80,7 +80,8 @@ def main(config_file=None):
 
     colormap = {'sgd-m': '#B3CBB9',
                 'sgd-sch': '#B3CBB9',
-                'adam': '#FF6B35',
+                #'adam': '#FF6B35',
+                'adamw': '#FF6B35',
                 'adam-sch': '#FF6B35',
                 'momo': '#61ACE5',
                 'momo-adam': '#00518F',
@@ -92,7 +93,8 @@ def main(config_file=None):
                     'sgd-sch': '--',
                     'teacher': '--',
                     'momo-adam': None,
-                    'adam': None,
+                    #'adam': None,
+                    'adamw': None,
                     'adam-sch': '--',
                     'muon': None,
     }

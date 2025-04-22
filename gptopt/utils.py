@@ -110,12 +110,12 @@ def get_default_config():
         "max_length": 512
     },
     "gpt_model": {
-        "model_name": "gpt2-medium",  # You can use one of the pre-defined models of transformers, or you can specify the exact dimension below
+        "model_name": "gpt2",  # You can use one of the pre-defined models of transformers, or you can specify the exact dimension below
         "n_embd": 768,  # Hidden size used in distilgpt2
-        "n_layer": 2,  # Number of layers in distilgpt2
-        "n_head": 4,  # Number of attention heads in distilgpt2
-        "vocab_size": 50304,
-        "tokenizer_name": "gpt2-large"
+        "n_layer": 12,  # Number of layers in distilgpt2
+        "n_head": 12,  # Number of attention heads in distilgpt2
+        "vocab_size": 50257,
+        "tokenizer_name": "gpt2"
     },
         'dataset': {
             'name': 'wikitext-2-raw-v1',

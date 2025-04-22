@@ -17,6 +17,26 @@ class Logging():
         self.step_times = []
 
 
+
+def eval_validation_loss(model, val_dataloader, val_accum_steps, autocast_ctxt):
+
+    world_size, rank, local_rank, device  = get_worker_info()
+    model.eval()
+    val_loss, counter = 0., 0
+    with torch.no_grad():
+        for batch in val_dataloader:
+            with autocast_ctxt:
+                val_loss += model(batch[0], batch[1], return_logits=False)[1]
+            counter += 1
+            if (val_accum_steps != 0) & (counter >= val_accum_steps): break
+    val_loss = torch.tensor(val_loss.clone().detach(), device=device)/counter
+    if world_size > 1: dist.all_reduce(val_loss, op=dist.ReduceOp.AVG)
+    if rank == 0:
+        print(f"Validation Loss: {val_loss.item()}")
+    model.train()
+    return val_loss
+
+
 def train(train_dataloader, val_dataloader, model, optimizer, training_params, logging_params, scheduler=None, ckpt_dir=None):
     
     world_size, rank, local_rank, device  = get_worker_info()
@@ -56,6 +76,7 @@ def train(train_dataloader, val_dataloader, model, optimizer, training_params, l
         step = 1 if load_ckpt_step == 0 else int(load_ckpt_step)
         optimizer.zero_grad()
         if step != 1: print(train_dataloader.get_state())
+        
         for batch in train_dataloader:            
             with autocast_ctxt:
                 loss = model(batch[0], batch[1], return_logits=False)[1]
@@ -95,21 +116,9 @@ def train(train_dataloader, val_dataloader, model, optimizer, training_params, l
                     print(f"Time taken : {step_time*1000:0.1f}ms | Tokens/s : {tps/1000:0.1f}k | Loss : {loss_accum.item():0.3f}")
                     
                 if (step % logging_params['val_step'] == 0):
-                    model.eval()
-                    val_loss, counter = 0., 0
-                    with torch.no_grad():
-                        for batch in val_dataloader:
-                            with autocast_ctxt:
-                                val_loss += model(batch[0], batch[1], return_logits=False)[1]
-                            counter += 1
-                            if counter >= val_accum_steps: break
-                    val_loss = torch.tensor(val_loss, device=device)/val_accum_steps
-                    if world_size > 1: dist.all_reduce(val_loss, op=dist.ReduceOp.AVG)
+                    val_loss = eval_validation_loss(model, val_dataloader, val_accum_steps, autocast_ctxt)
                     logger.val_losses.append(val_loss.item())
-                    if master_process:
-                        print(f"Validation Loss: {val_loss.item()}")
-                    model.train()
-                    
+
                 if (step % logging_params['save_ckpt_step'] == 0):
                     save_checkpoint(ckpt_dir, step, model, optimizer, loss_accum.item(),
                                     train_dataloader, scheduler, logging_params['keep_last'])
@@ -125,20 +134,17 @@ def train(train_dataloader, val_dataloader, model, optimizer, training_params, l
         print(f"In rank: {rank}, epoch {epoch+1}, Train Loss: {logger.losses[-1]}")
         print(f"In rank: {rank}, time taken for epoch {epoch+1} : ", time.time() - start_epoch)
         
-        # Evaluate on val set
-        model.eval()
-        val_loss, counter = 0., 0
-        with torch.no_grad():
-            for _, batch in enumerate(val_dataloader):
-                with autocast_ctxt:
-                    val_loss += model(batch[0], batch[1], return_logits=False)[1]
-                counter += 1
-        if counter: val_loss /= counter
-        val_loss = torch.tensor(val_loss, device=device)
-        if world_size > 1: dist.all_reduce(val_loss, op=dist.ReduceOp.AVG)
+        # Evaluate on val set, and save final values
+        val_dataloader.reset()
+        val_loss = eval_validation_loss(model, val_dataloader, 0, autocast_ctxt)
         logger.val_losses.append(val_loss.item())
-        print(f"In rank: {rank}, epoch {epoch+1}, Validation Loss: {val_loss.item()}")
-
+        print(f"In rank: {rank}, epoch {epoch+1}, Validation Loss: {val_loss.item()}")        
+        save_checkpoint(ckpt_dir, step, model, optimizer, logger.losses[-1],
+                        train_dataloader, scheduler, logging_params['keep_last'])        
+        if master_process:
+            with open(ckpt_dir + '/log.json', 'w') as file:
+                json.dump(logger.__dict__, file)
+                
     if hasattr(optimizer, 'step_size_list'):      # Check if optimizer has a step_size_list attribute
         logger.step_size_list = optimizer.step_size_list  
     return logger
