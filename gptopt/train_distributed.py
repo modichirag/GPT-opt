@@ -37,7 +37,7 @@ def eval_validation_loss(model, val_dataloader, val_accum_steps, autocast_ctxt):
     return val_loss
 
 
-def train(train_dataloader, val_dataloader, model, optimizer, training_params, logging_params, scheduler=None, ckpt_dir=None):
+def train(train_dataloader, val_dataloader, model, optimizer, training_params, logging_params, scheduler=None, ckpt_dir=""):
     
     world_size, rank, local_rank, device  = get_worker_info()
     master_process = (rank == 0)
@@ -63,7 +63,9 @@ def train(train_dataloader, val_dataloader, model, optimizer, training_params, l
     if load_ckpt_step != 0:
         model, optimizer, train_dataloader, scheduler = load_checkpoint(ckpt_dir, load_ckpt_step, model, \
                                                         optimizer, train_dataloader, scheduler=None)
-        
+    if ckpt_dir == "":
+        print("Will not save checkpoints as no directory is specified")
+    
     # Training loop
     for epoch in range(training_params['num_epochs']):
         if master_process:
@@ -119,7 +121,7 @@ def train(train_dataloader, val_dataloader, model, optimizer, training_params, l
                     val_loss = eval_validation_loss(model, val_dataloader, val_accum_steps, autocast_ctxt)
                     logger.val_losses.append(val_loss.item())
 
-                if (step % logging_params['save_ckpt_step'] == 0):
+                if (step % logging_params['save_ckpt_step'] == 0) & (ckpt_dir != ""):
                     save_checkpoint(ckpt_dir, step, model, optimizer, loss_accum.item(),
                                     train_dataloader, scheduler, logging_params['keep_last'])
                     
@@ -139,11 +141,12 @@ def train(train_dataloader, val_dataloader, model, optimizer, training_params, l
         val_loss = eval_validation_loss(model, val_dataloader, 0, autocast_ctxt)
         logger.val_losses.append(val_loss.item())
         print(f"In rank: {rank}, epoch {epoch+1}, Validation Loss: {val_loss.item()}")        
-        save_checkpoint(ckpt_dir, step, model, optimizer, logger.losses[-1],
+        if (ckpt_dir != ""):
+            save_checkpoint(ckpt_dir, step, model, optimizer, logger.losses[-1],
                         train_dataloader, scheduler, logging_params['keep_last'])        
-        if master_process:
-            with open(ckpt_dir + '/log.json', 'w') as file:
-                json.dump(logger.__dict__, file)
+            if master_process:
+                with open(ckpt_dir + '/log.json', 'w') as file:
+                    json.dump(logger.__dict__, file)
                 
     if hasattr(optimizer, 'step_size_list'):      # Check if optimizer has a step_size_list attribute
         logger.step_size_list = optimizer.step_size_list  
