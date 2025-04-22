@@ -55,7 +55,6 @@ def load_model_huggingface(config, device):
 
 def load_model(config, device):
     gptconfig = GPTConfig()
-    print(config)
     gptconfig.n_embd = config['n_embd']
     gptconfig.n_layer = config['n_layer']
     gptconfig.n_head = config['n_head']

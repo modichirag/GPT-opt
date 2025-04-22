@@ -1,23 +1,17 @@
 # config.yaml
 optimizer_params:
-  - name: adam
-    lr: [0.00005,  0.0001,  0.001]
-    weight_decay: 0
-    lr_schedule: constant
+  - name: adamw
+    lr: [0.0001, 0.0005, 0.001]
+    weight_decay: 0.1
+    lr_schedule: warm-up-cosine
+    warm_up_fraction: 0.1
 
   - name: momo-adam
-    lr: [0.00005,  0.0001,  0.001]
-    weight_decay: 0
+    lr: [0.0001, 0.0005, 0.001]
+    weight_decay: 0.1
     lb: 2.5
-    lr_schedule: constant
-
-  # - name: sgd-m
-  #   lr: [0.00005,  0.0001,  0.0005]
-  #   weight_decay: 0
-  #   momentum: 0.9
-  #   dampening: 0.9
-  #   lr_schedule: warm-up-cosine
-  #   warm_up_percent: 0.2
+    lr_schedule: warm-up-cosine
+    warm_up_fraction: 0.1
 
   - name: muon
     lr: [0.0001, 0.0005, 0.001]
@@ -31,15 +25,15 @@ training_params:
   batch_size: 32
   num_epochs: 1
   context_length: 1024
-  # gradnorm: 1.0
-  matmul_precision: high   #Can be highest, high, or medium
+  gradnorm: 1.0
+  tensorcore_precision: high   #Can be highest, high, or medium
   autocast: True
   mixed_precision: bfloat16
   compile: True
 
 logging_params:
   val_tokens_processed: 8388608 #2^23
-  log_step: 20
+  log_step: 50
   val_step: 50
   save_ckpt_step: 100
   load_ckpt_step: 0
