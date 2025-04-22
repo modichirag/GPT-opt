@@ -15,7 +15,7 @@ module load modules/2.3-20240529
 source /mnt/home/cmodi/envs/torchlatest/bin/activate
 module list 
 
-#time torchrun --standalone --nproc_per_node=4 run_distributed.py --config configs/finewebmini.yaml 
-time torchrun --standalone --nproc_per_node=4 run_distributed.py --config configs/fineweb1B.yaml --suffix nognorm
-#time torchrun --standalone --nproc_per_node=4 run_distributed.py --config configs/fineweb10B.yaml
-#time torchrun --standalone --nproc_per_node=4 run_distributed.py --config configs/shakespeare-local.yaml
+#time torchrun --standalone --nproc_per_node=4 run.py --config configs/finewebmini.yaml 
+time torchrun --standalone --nproc_per_node=4 run.py --config configs/fineweb1B.yaml --suffix nognorm
+#time torchrun --standalone --nproc_per_node=4 run.py --config configs/fineweb10B.yaml
+#time torchrun --standalone --nproc_per_node=4 run.py --config configs/shakespeare-local.yaml
