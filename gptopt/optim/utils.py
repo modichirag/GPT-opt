@@ -6,6 +6,12 @@ from transformers import get_cosine_schedule_with_warmup
 from .momo import Momo
 from .momo_adam import MomoAdam
 from .muon import Muon
+from .cclip_adam import CClipAdam
+from .cclip_sgd import CClipSGD
+from .vclip_adam import VClipAdam   
+from .vclip_sgd import VClipSGD
+from .huber_sgd import HuberSGD
+
 # from .sps import SPS
 # from .adabound import AdaBoundW
 # from .adabelief import AdaBelief
@@ -30,6 +36,21 @@ def get_optimizer(opt_config: dict, lr = 1e-3) -> Tuple[torch.optim.Optimizer, d
                   }
         
     elif name == 'sgd-m':
+        opt_obj = torch.optim.SGD
+        # sgd-m with exp. weighted average should have dampening = momentum
+        if opt_config.get('dampening') == 'momentum':
+            dampening = opt_config.get('momentum', 0.9)
+        else:
+            dampening = opt_config.get('dampening', 0)
+            
+        hyperp = {'lr': lr,
+                  'weight_decay': opt_config.get('weight_decay', 0),
+                  'momentum': opt_config.get('momentum', 0.9),
+                  'nesterov': False,
+                  'dampening': dampening
+                  }
+        
+    elif name == 'clipped-sgd-m':
         opt_obj = torch.optim.SGD
         # sgd-m with exp. weighted average should have dampening = momentum
         if opt_config.get('dampening') == 'momentum':
@@ -125,48 +146,37 @@ def get_optimizer(opt_config: dict, lr = 1e-3) -> Tuple[torch.optim.Optimizer, d
                   'nuclear_scaling': opt_config.get('rms_scaling', False)
                   }
 
-    # elif name == 'iam':
-    #     opt_obj = IAM
-    #     hyperp = {'lr': lr,
-    #               'weight_decay': opt_config.get('weight_decay', 0),
-    #               'betas': opt_config.get('betas', (0.9, 0.999)),
-    #               'eps': opt_config.get('eps', 1e-8),
-    #               'lb': opt_config.get('lb', 0.),
-    #               'divide': opt_config.get('divide', True),
-    #               'use_fstar': True
-    #               }          
-    # elif name == 'prox-sps':
-    #     opt_obj = SPS
-    #     hyperp = {'lr': lr,
-    #               'weight_decay': opt_config.get('weight_decay', 0),
-    #               'lb': opt_config.get('lb', 0.),
-    #               'prox': True
-    #               }
-    
-    # elif name == 'adabound':
-    #     opt_obj = AdaBoundW
-        
-    #     hyperp = {'lr': lr,
-    #               'weight_decay': opt_config.get('weight_decay', 0),
-    #               'betas': opt_config.get('betas', (0.9, 0.999)),
-    #               'eps': opt_config.get('eps', 1e-8),
-    #               'final_lr': opt_config.get('final_lr', 0.1)
-    #               }
+    elif name == 'vclip-sgd':
+        opt_obj = VClipSGD
+        hyperp = {'lr': lr,
+                  'clip': opt_config.get('clip', 1.0/9.0)
+                  }
 
-    # elif name == 'adabelief':
-    #     opt_obj = AdaBelief
-    #     hyperp = {'lr': lr,
-    #               'weight_decay': opt_config.get('weight_decay', 0),
-    #               'betas': opt_config.get('betas', (0.9, 0.999)),
-    #               'eps': opt_config.get('eps', 1e-16),
-    #               }
-        
-    # elif name == 'lion':
-    #     opt_obj = Lion
-    #     hyperp = {'lr': lr,
-    #               'weight_decay': opt_config.get('weight_decay', 0),
-    #               'betas': opt_config.get('betas', (0.9, 0.99)),
-    #               }
+    elif name == 'cclip-sgd':
+        opt_obj = CClipSGD
+        hyperp = {'lr': lr,
+                  'clip': opt_config.get('clip', 1.0/9.0)
+                  }
+
+    elif name == 'huber-sgd':
+        opt_obj = HuberSGD
+        hyperp = {'lr': lr,
+                  'clip': opt_config.get('clip', 1.0/9.0),
+                  'mu': opt_config.get('mu', 0.1)
+                  }
+
+    elif name == 'vclip-adam':
+        opt_obj = VClipAdam
+        hyperp = {'lr': lr,
+                  'clip': opt_config.get('clip', 1.0/9.0)
+                  }
+
+    elif name == 'cclip-adam':
+        opt_obj = CClipAdam
+        hyperp = {'lr': lr,
+                  'clip': opt_config.get('clip', 1.0/9.0)
+                  }
+
     else:
         raise KeyError(f"Unknown optimizer name {name}.")
         
