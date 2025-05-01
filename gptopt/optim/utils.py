@@ -113,16 +113,18 @@ def get_optimizer(opt_config: dict, lr = 1e-3) -> Tuple[torch.optim.Optimizer, d
                   'use_fstar': True
                   }
 
-    elif name == 'muon':
+    elif 'muon' in name:
         opt_obj = Muon
+        rms_scaling = 'rms' in name
+        nuclear_scaling = 'nuclear' in name
         hyperp = {'lr': lr,
                   'wd': opt_config.get('weight_decay', 0),
                   'adamw_betas': opt_config.get('betas', (0.95, 0.95)),
                   'momentum': opt_config.get('momentum', 0.95),
                   'nesterov': True,
                   'ns_steps': opt_config.get('ns_steps', 5),
-                  'rms_scaling': opt_config.get('rms_scaling', True),
-                  'nuclear_scaling': opt_config.get('rms_scaling', False)
+                  'rms_scaling': rms_scaling,
+                  'nuclear_scaling': nuclear_scaling
                   }
 
     # elif name == 'iam':

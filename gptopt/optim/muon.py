@@ -177,7 +177,12 @@ class Muon(torch.optim.Optimizer):
                 
                 # scale update
                 adjusted_lr = self.adjust_lr_for_muon(
-                    lr, group["rms_scaling"], group["nuclear_scaling"], p.shape, g, u
+                    lr,
+                    group["rms_scaling"],
+                    group["nuclear_scaling"],
+                    p.shape,
+                    g.bfloat16(), # convert to float16 to be compatible with u
+                    u
                 )
                 
                 # apply weight decay
