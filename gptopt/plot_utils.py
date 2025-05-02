@@ -114,8 +114,14 @@ def smoothen_dict(dict, num_points, beta= 0.05):
     for key in dict.keys():
         if key == 'losses':
             dict[key] = smoothen_curve_exp(dict[key], num_points, beta = beta)
-        elif key == 'step_size_list':
-            dict[key] = smoothen_curve_exp(dict[key], len(dict[key]), beta = beta)
+
+        """
+        Michael: Temporarily removing smoothing of step_size_list. smoothen_curve_exp is
+        breaking for Momo-Adam because it has two step sizes at each iteration.
+        """
+        # elif key == 'step_size_list':
+        #     dict[key] = smoothen_curve_exp(dict[key], len(dict[key]), beta = beta)
+
         # dict[key] = smoothen_curve(dict[key], num_points)
 
 

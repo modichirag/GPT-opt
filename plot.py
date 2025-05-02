@@ -80,23 +80,29 @@ def main(config_file=None):
 
     colormap = {'sgd-m': '#B3CBB9',
                 'sgd-sch': '#B3CBB9',
-                #'adam': '#FF6B35',
+                'adam': '#FF6B35',
                 'adamw': '#FF6B35',
                 'adam-sch': '#FF6B35',
                 'momo': '#61ACE5',
                 'momo-adam': '#00518F',
                 'teacher': 'k',
                 'muon': '#8A2BE2',  # Added a new color for "muon" (blue-violet)
+                'muon-rms': '#FFFF00',
+                'muon-nuclear': '#008000',
+                'muon-rms-nuclear': '#FF0000',
     }
     linestylemap = {'momo': None,
                     'sgd-m': None,
                     'sgd-sch': '--',
                     'teacher': '--',
                     'momo-adam': None,
-                    #'adam': None,
+                    'adam': None,
                     'adamw': None,
                     'adam-sch': '--',
                     'muon': None,
+                    'muon-rms': None,
+                    'muon-nuclear': None,
+                    'muon-rms-nuclear': None,
     }
 
     # Collect learning rate ranges for each method
@@ -109,6 +115,11 @@ def main(config_file=None):
         else:
             lr_ranges[name][0] = min(lr_ranges[name][0], lr)
             lr_ranges[name][1] = max(lr_ranges[name][1], lr)
+
+    # Michael: Temparily resetting matplotlib settings to default so that latex doesn't
+    # need to be used for plot formatting. Was giving me an error.
+    import matplotlib as mpl
+    mpl.rcParams.update(mpl.rcParamsDefault)
 
     # Plot final loss vs learning rate
     plot_final_loss_vs_lr(outputs, colormap, outfilename)
