@@ -87,9 +87,9 @@ def main(config_file=None):
                 'momo-adam': '#00518F',
                 'teacher': 'k',
                 'muon': '#8A2BE2',  # Added a new color for "muon" (blue-violet)
-                'muon-rms': '#FFFF00',
-                'muon-nuclear': '#008000',
-                'muon-rms-nuclear': '#FF0000',
+                'muon*': '#FFFF00',
+                'muon-newtonschultz': '#008000',
+                'muon-keller': '#FF0000',
     }
     linestylemap = {'momo': None,
                     'sgd-m': None,
@@ -100,9 +100,9 @@ def main(config_file=None):
                     'adamw': None,
                     'adam-sch': '--',
                     'muon': None,
-                    'muon-rms': None,
-                    'muon-nuclear': None,
-                    'muon-rms-nuclear': None,
+                    'muon*': None,
+                    'muon-newtonschultz': None,
+                    'muon-keller': None,
     }
 
     # Collect learning rate ranges for each method
@@ -136,7 +136,7 @@ def main(config_file=None):
     fig.savefig('figures/' + outfilename + '.pdf', format='pdf', bbox_inches='tight')
 
 
-        # Plot learning rates
+    # Plot learning rates
     for method_subset in [['sgd-m', 'sgd-sch', 'momo'], ['adam', 'adam-sch', 'momo-adam']]:
         fig, ax = plt.subplots(figsize=(4, 3))
         subset_outputs = [output for output in outputs if output['name'].split('-lr-')[0] in method_subset]

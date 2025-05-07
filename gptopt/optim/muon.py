@@ -6,8 +6,9 @@
 import torch
 import math
 import warnings
-
-@torch.compile  ## I had to comment this out, it was throwing an error
+from gptopt.optim.polar_express import PolynomialPolarFactorizer
+from gptopt.optim.polar_express import Keller, Pole, NewtonSchultz,SmartNormalizer, FrobeniusNormalizer
+# @torch.compile
 def zeropower_via_newtonschulz5(G, steps):
     """
     Newton-Schulz iteration to compute the zeroth power / orthogonalization of G. We opt to use a
@@ -19,7 +20,7 @@ def zeropower_via_newtonschulz5(G, steps):
     performance at all relative to UV^T, where USV^T = G is the SVD.
     """
     assert len(G.shape) == 2
-    a, b, c = (3.4445, -4.7750, 2.0315)
+    a, b, c = (3.4445, -4.7750, 2.0315) 
     X = G.bfloat16()
     if G.size(0) > G.size(1):
         X = X.T
@@ -58,11 +59,6 @@ class Muon(torch.optim.Optimizer):
         momentum: The momentum used by the internal SGD. (0.95 is a good default)
         nesterov: Whether to use Nesterov-style momentum in the internal SGD. (recommended)
         ns_steps: The number of Newton-Schulz iterations to run. (6 is probably always enough)
-        rms_scaling: Whether to scale each layer's LR by sqrt(fan_out/fan_in), which
-        comes from choosing the RMS norm instead of L2 norm for steepest descent.
-        nuclear_scaling: Whether to scale each layer's LR by the nuclear norm of the
-        gradient, which comes from choosing the L2 norm for the product space over
-        layers instead of the max norm.
         adamw_params: The parameters to be optimized by AdamW. Any parameters in `muon_params` which are
         {0, 1}-D or are detected as being the embed or lm_head will be optimized by AdamW as well.
         adamw_lr: The learning rate for the internal AdamW.
@@ -79,9 +75,15 @@ class Muon(torch.optim.Optimizer):
                  ns_steps=5,
                  rms_scaling=True,
                  nuclear_scaling=False,
+                 polar_method="NewtonSchultz",
+                 polar_params=None,
                  adamw_betas=(0.95, 0.95),
                  adamw_eps=1e-8):
-            
+        """
+        Arguments:
+            polar_method: The name of the polar factorization method to use (e.g., "NewtonSchultz", "Keller", "Pole") where PolE = PolarExpress
+            polar_params: A dictionary of hyperparameters for the polar factorization method.
+        """
         defaults = dict(
                 lr=lr,
                 wd=wd,
@@ -94,6 +96,7 @@ class Muon(torch.optim.Optimizer):
                 adamw_eps=adamw_eps,
         )
         
+        print("EMBED TOKENS AND LM_HEAD ARE NOT HANDLED CORRECTLY FOR MUON, THEY SHOULD BE WITH ADAMW.")
         muon_params, muon_params_names = [], []
         adamw_params, adamw_params_names = [], []
         for name, p in named_params:
@@ -103,22 +106,49 @@ class Muon(torch.optim.Optimizer):
             else:
                 adamw_params.append(p)
                 adamw_params_names.append(name)
-        # print("EMBED TOKENS AND LM_HEAD SHOULD BE WITH ADAMW.")
-        # print("Params trained with MUON : ", muon_params_names)
-        # print("Params trained with ADAMW : ", adamw_params_names)
         params = list(muon_params)
         params.extend(adamw_params)
         super().__init__(params, defaults)
         
         # Sort parameters into those for which we will use Muon, and those for which we will not
-        # Use Muon for every parameter in muon_params which is >= 2D and doesn't look like an embedding or head layer
+# Use Muon for every parameter in muon_params which is >= 2D and doesn't look like an embedding or head layer
         for p in muon_params:
-                assert p.ndim == 2, p.ndim
-                self.state[p]["use_muon"] = True
+            assert p.ndim == 2, p.ndim
+            self.state[p]["use_muon"] = True
                 
         for p in adamw_params:
-                # Do not use Muon for parameters in adamw_params
-                self.state[p]["use_muon"] = False
+# Do not use Muon for parameters in adamw_params
+            self.state[p]["use_muon"] = False
+
+        # Instantiate the polar factorization method
+        self.polar_factorizer = self._initialize_polar_factorizer(polar_method, polar_params)
+
+    def _initialize_polar_factorizer(self, polar_method, polar_params):
+        """Initialize the polar factorization method based on the provided name and parameters."""
+        if polar_params is None:
+            polar_params = {}
+
+        if polar_method == "NewtonSchultz":
+            return PolynomialPolarFactorizer(
+                normalizer=SmartNormalizer(**polar_params.get("normalizer_params", {})),
+                polynomial_sign_iteration=NewtonSchultz(),
+                use_fast_apply=polar_params.get("use_fast_apply", True),
+                deflation_eps=polar_params.get("deflation_eps", 0),
+                cast=polar_params.get("cast", None)
+            )
+        elif polar_method == "Keller":
+            return zeropower_via_newtonschulz5  # Use the method directly
+        elif polar_method == "Pole":
+            return PolynomialPolarFactorizer(
+                normalizer= FrobeniusNormalizer(**polar_params.get("normalizer_params", {})),
+                # normalizer=SmartNormalizer(**polar_params.get("normalizer_params", {})),
+                polynomial_sign_iteration=Pole(**polar_params.get("polynomial_params", {})),
+                use_fast_apply=polar_params.get("use_fast_apply", True),
+                deflation_eps=polar_params.get("deflation_eps", 0),
+                cast=polar_params.get("cast", None)
+            )
+        else:
+            raise ValueError(f"Unknown polar method: {polar_method}")
 
     def adjust_lr_for_muon(self, lr, rms_scaling, nuclear_scaling, param_shape, grad, grad_sign):
         scale = 1.0
@@ -134,12 +164,12 @@ class Muon(torch.optim.Optimizer):
             Args:
             closure (Callable, optional): A closure that reevaluates the model
                 and returns the loss.
-        """
-        
+"""
+
         loss = None
         if closure is not None:
-                with torch.enable_grad():
-                        loss = closure()
+            with torch.enable_grad():
+                loss = closure()
                         
         for group in self.param_groups:
             ############################
@@ -153,9 +183,7 @@ class Muon(torch.optim.Optimizer):
 
             # generate weight updates in distributed fashion
             for p in params:
-                # sanity check
                 g = p.grad
-                
                 if g is None:
                     continue
                 if g.ndim > 2:
@@ -173,7 +201,8 @@ class Muon(torch.optim.Optimizer):
                     g = g.add(buf, alpha=momentum)
                 else:
                     g = buf
-                u = zeropower_via_newtonschulz5(g, steps=group["ns_steps"])
+                # Use the selected polar factorization method
+                u = self.polar_factorizer(g, group["ns_steps"])
                 
                 # scale update
                 adjusted_lr = self.adjust_lr_for_muon(
@@ -181,7 +210,7 @@ class Muon(torch.optim.Optimizer):
                     group["rms_scaling"],
                     group["nuclear_scaling"],
                     p.shape,
-                    g.bfloat16(), # convert to float16 to be compatible with u
+                    g.bfloat16(),  # convert to float16 to be compatible with u
                     u
                 )
                 

@@ -1,23 +1,59 @@
 # config.yaml
 optimizer_params:
-  - name: adamw
-    lr: [0.0001, 0.0005, 0.001]
-    weight_decay: 0.1
-    lr_schedule: warm-up-cosine
-    warm_up_fraction: 0.1
+  # - name: adamw
+  #   lr: [0.005, 0.01, 0.05]
+  #   # lr: [0.0001, 0.0005, 0.001]
+  #   weight_decay: 0.1
+  #   lr_schedule: warm-up-cosine
+  #   warm_up_fraction: 0.1
 
-  - name: momo-adam
-    lr: [0.0001, 0.0005, 0.001]
-    weight_decay: 0.1
-    lb: 2.5
-    lr_schedule: warm-up-cosine
-    warm_up_fraction: 0.1
+  # - name: momo-adam
+  #   lr: [0.005, 0.01, 0.05]
+  #   # lr: [0.0001, 0.0005, 0.001]
+  #   weight_decay: 0.1
+  #   lb: 2.5
+  #   lr_schedule: warm-up-cosine
+  #   warm_up_fraction: 0.1
 
-  - name: muon
-    lr: [0.0001, 0.0005, 0.001]
+  # - name: muon-jiacheng
+  #   lr: [0.005, 0.01, 0.05]
+  #   weight_decay: 0.1
+  #   lr_schedule: warm-up-cosine
+  #   warm_up_fraction: 0.1
+  #   polar_params:
+  #     normalizer_params: {}
+  #     use_fast_apply: False
+  #     deflation_eps: 0.001
+
+  # - name: muon-keller
+  #   lr: [0.005, 0.01, 0.05]
+  #   weight_decay: 0.1
+  #   lr_schedule: warm-up-cosine
+  #   warm_up_fraction: 0.1
+  #   polar_params:
+  #     normalizer_params: {}
+  #     use_fast_apply: False
+  #     deflation_eps: 0.001
+
+  - name: muon*
+    lr: [0.005, 0.01, 0.05]
     weight_decay: 0.1
     lr_schedule: warm-up-cosine
     warm_up_fraction: 0.1
+    polar_params:
+      normalizer_params: 
+        absolute_lower_bound: 0.001 
+      use_fast_apply: False
+      deflation_eps: 0.001 
+      polynomial_params: 
+        cushion: 0.01
+      # cast: bfloat16
+    # polar_params:
+    # normalizer=SmartNormalizer(1e-3),
+    # polynomial_sign_iteration=Pole(cushion=1e-2),
+    # use_fast_apply=False,
+    # deflation_eps=1e-3,
+    # ,
 
 training_params:
   tokens_processed: 2048 # 2^11  # 524288 # 2^19
@@ -29,7 +65,7 @@ training_params:
   tensorcore_precision: high   #Can be highest, high, or medium
   autocast: True
   mixed_precision: bfloat16
-  compile: True
+  compile: False
 
 logging_params:
   val_tokens_processed: 2048 #2^23
@@ -49,4 +85,4 @@ gpt_model:
   flash_attention: True
 
 dataset:
-  name: "tiny_shakespeare"  
+  name: "tiny_shakespeare"
