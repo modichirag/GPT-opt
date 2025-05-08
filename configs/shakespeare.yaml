@@ -36,7 +36,7 @@ optimizer_params:
   #     deflation_eps: 0.001
 
   - name: muon*
-    lr: [0.005, 0.01, 0.05]
+    lr: [0.0005, 0.001, 0.005, 0.01, 0.05]
     weight_decay: 0.1
     lr_schedule: warm-up-cosine
     warm_up_fraction: 0.1
@@ -47,13 +47,7 @@ optimizer_params:
       deflation_eps: 0.001 
       polynomial_params: 
         cushion: 0.01
-      # cast: bfloat16
-    # polar_params:
-    # normalizer=SmartNormalizer(1e-3),
-    # polynomial_sign_iteration=Pole(cushion=1e-2),
-    # use_fast_apply=False,
-    # deflation_eps=1e-3,
-    # ,
+
 
 training_params:
   tokens_processed: 2048 # 2^11  # 524288 # 2^19

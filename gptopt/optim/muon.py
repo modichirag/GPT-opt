@@ -7,7 +7,7 @@ import torch
 import math
 import warnings
 from gptopt.optim.polar_express import PolynomialPolarFactorizer
-from gptopt.optim.polar_express import Keller, Pole, NewtonSchultz,SmartNormalizer, FrobeniusNormalizer
+from gptopt.optim.polar_express import Keller, Pole, Jiacheng, NewtonSchultz,SmartNormalizer, FrobeniusNormalizer
 # @torch.compile
 def zeropower_via_newtonschulz5(G, steps):
     """
@@ -96,7 +96,7 @@ class Muon(torch.optim.Optimizer):
                 adamw_eps=adamw_eps,
         )
         
-        print("EMBED TOKENS AND LM_HEAD ARE NOT HANDLED CORRECTLY FOR MUON, THEY SHOULD BE WITH ADAMW.")
+        # print("EMBED TOKENS AND LM_HEAD ARE NOT HANDLED CORRECTLY FOR MUON, THEY SHOULD BE WITH ADAMW.")
         muon_params, muon_params_names = [], []
         adamw_params, adamw_params_names = [], []
         for name, p in named_params:
@@ -138,6 +138,14 @@ class Muon(torch.optim.Optimizer):
             )
         elif polar_method == "Keller":
             return zeropower_via_newtonschulz5  # Use the method directly
+        elif polar_method == "Jiacheng":
+            return PolynomialPolarFactorizer(
+                normalizer=FrobeniusNormalizer(**polar_params.get("normalizer_params", {})),
+                polynomial_sign_iteration=Jiacheng(**polar_params.get("polynomial_params", {})),
+                use_fast_apply=polar_params.get("use_fast_apply", False),
+                deflation_eps=polar_params.get("deflation_eps", 0),
+                cast=polar_params.get("cast", None)
+            )
         elif polar_method == "Pole":
             return PolynomialPolarFactorizer(
                 normalizer= FrobeniusNormalizer(**polar_params.get("normalizer_params", {})),
