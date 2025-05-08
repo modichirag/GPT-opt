@@ -78,7 +78,15 @@ for opt_config in list_optimizer_params:
         opt_config_copy = copy.deepcopy(opt_config)
         opt_config_copy['lr'] = lr
         config_hash = hash_config(opt_config_copy, training_params, config['gpt_model'])
-        file_name = f"{opt_config['name']}-lr-{lr}-{opt_config['lr_schedule']}-{config_hash}-world{world_size}"
+        if "muon*" in opt_config['name']:
+            polar_params = opt_config['polar_params']   
+            file_name = opt_config['name'] + '-fast-' +str(polar_params['use_fast_apply'])
+            file_name = file_name  +'-abs_low-' +str(polar_params['normalizer_params']['absolute_lower_bound'])
+            file_name = file_name  +'-defl-' +str(polar_params['deflation_eps'])
+            file_name = file_name  +'-cush-' +str(polar_params['polynomial_params']['cushion'])
+            file_name = f"{file_name}-lr-{lr}-{opt_config['lr_schedule']}-{config_hash}-world{world_size}"
+        else:
+            file_name = f"{opt_config['name']}-lr-{lr}-{opt_config['lr_schedule']}-{config_hash}-world{world_size}"
         if args.suffix != '': file_name += f"-{args.suffix}"
         output_path = os.path.join(output_dir, file_name + '.json')
         ckpt_dir = os.path.join(ckpt_dir_base, file_name) + '/' if CKPT_DIR != "" else ""
@@ -104,7 +112,16 @@ for opt_config in list_optimizer_params:
 
         # Save
         if master_process:
-            logger.name = opt_config['name'] + '-lr-' + str(lr)
+            if 'muon*' in opt_config['name']:
+                polar_params = opt_config['polar_params']   
+                logger.name = opt_config['name'] + '-fast-' +str(polar_params['use_fast_apply'])
+                logger.name = logger.name  +'-abs_low-' +str(polar_params['normalizer_params']['absolute_lower_bound'])
+                logger.name = logger.name  +'-defl-' +str(polar_params['deflation_eps'])
+                logger.name = logger.name  +'-cush-' +str(polar_params['polynomial_params']['cushion'])
+                logger.name = logger.name  +'-lr-' + str(lr)
+            else:
+                logger.name = opt_config['name'] + '-lr-' + str(lr)
+
             if os.path.exists(output_path):
                 print(f"File {output_path} already exists. Overwriting")
             with open(output_path, 'w') as file:
