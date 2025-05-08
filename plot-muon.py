@@ -62,7 +62,7 @@ def plot_final_loss_vs_lr(outputs, colormap, outfilename, val=False):
         plotfile = 'figures/' + outfilename + '-lr-sens' + '.pdf'
     ax.legend(loc='upper right', fontsize=10)
     ax.grid(axis='both', lw=0.2, ls='--', zorder=0)
-    # ax.set_ylim(top=7)
+    ax.set_ylim(top=7)
     fig.subplots_adjust(top=0.95, bottom=0.15, left=0.15, right=0.95)
     fig.savefig(plotfile, format='pdf', bbox_inches='tight')
 

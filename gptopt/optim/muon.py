@@ -122,7 +122,6 @@ class Muon(torch.optim.Optimizer):
 
         # Instantiate the polar factorization method
         self.polar_factorizer = self._initialize_polar_factorizer(polar_method, polar_params)
-
     def _initialize_polar_factorizer(self, polar_method, polar_params):
         """Initialize the polar factorization method based on the provided name and parameters."""
         if polar_params is None:

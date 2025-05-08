@@ -217,6 +217,28 @@ def get_scheduler(config: dict, opt: torch.optim.Optimizer, total_iterations = N
                     num_warmup_steps=num_warmup_steps,
                     num_training_steps=total_iterations
                     )
+    elif 'constant-linear' in name:  # New scheduler
+        num_warmup_steps = int(config['warm_up_fraction'] * total_iterations)
+
+        # def get_lr(step: int):
+        #     x = step / total_iterations  # progress in training
+        #     assert 0 <= x < 1
+        #     if x < config['warm_up_fraction']:
+        #         return 1.0  # Stable learning rate
+        #     else:
+        #         w = (1 - x) / (1-config['warm_up_fraction'])
+        #         return w * 1.0 + (1 - w) * 0.1  # Linear decay during cooldown
+
+
+        def get_lr(step):
+            if step < num_warmup_steps:
+                return 1.0  # Constant learning rate during warm-up
+            else:
+                # Linearly decay after warm-up
+                return max(0.1, 1.0 - (step - num_warmup_steps) / (total_iterations - num_warmup_steps))
+
+        scheduler = LambdaLR(opt, lr_lambda=get_lr)
+
         
     else:
         raise ValueError(f"Unknown learning rate schedule name {name}.")
