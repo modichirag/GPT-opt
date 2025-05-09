@@ -110,6 +110,9 @@ def main(config_file=None):
     lr_ranges = {}
     for output in outputs:
         name, lr = output['name'].split('-lr-')
+        if 'muon*' in name:
+            name = 'muon*'
+            output['name'] = 'muon*' + '-lr-' + lr  # Update the name to 'muon*'
         lr = float(lr)
         if name not in lr_ranges:
             lr_ranges[name] = [lr, lr]

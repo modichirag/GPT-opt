@@ -25,7 +25,7 @@ def load_outputs(output_dir):
                 outputs.append(output)
     return outputs
 
-def plot_final_loss_vs_lr(outputs, colormap, outfilename, val=False):
+def plot_final_loss_vs_lr(outputs, colormap, outfilename, val=False, line_styles=None):
     """Plot final loss versus learning rate as lines for each method."""
     fig, ax = plt.subplots(figsize=(6, 4))
     methods = {}
@@ -50,7 +50,7 @@ def plot_final_loss_vs_lr(outputs, colormap, outfilename, val=False):
         sorted_indices = sorted(range(len(data['lrs'])), key=lambda i: data['lrs'][i])  # Sort by learning rate
         sorted_lrs = [data['lrs'][i] for i in sorted_indices]
         sorted_losses = [data['losses'][i] for i in sorted_indices]
-        ax.plot(sorted_lrs, sorted_losses, label=name, color=colormap[name], linewidth=2)
+        ax.plot(sorted_lrs, sorted_losses, label=name, color=colormap[name], linestyle = line_styles[name], linewidth=2)
 
     ax.set_xscale('log')
     ax.set_xlabel('Learning Rate')
@@ -70,7 +70,7 @@ def main(config_file=None):
     default_config = get_default_config()
     if config_file:
         config = load_config(default_config, config_file)
-    outfilename = config_file.replace("configs/", "").replace('.yaml', '')
+    outfilename = config_file.replace("configs/", "").replace('.yaml', '') 
     output_dir = f"gptopt/outputs/{outfilename}"
     outputs = load_outputs(output_dir)
 
@@ -115,8 +115,8 @@ def main(config_file=None):
     mpl.rcParams.update(mpl.rcParamsDefault)
 
     # Plot final loss vs learning rate
-    plot_final_loss_vs_lr(outputs, method_colors, outfilename)
-    plot_final_loss_vs_lr(outputs, method_colors, outfilename, val=True)
+    plot_final_loss_vs_lr(outputs, method_colors, outfilename, line_styles = line_styles)
+    plot_final_loss_vs_lr(outputs, method_colors, outfilename, val=True, line_styles = line_styles)
     # Plot loss
     initial_loss = outputs[0]['losses'][0] if outputs and 'losses' in outputs[0] else 1.0  # Default to 1.0 if not available
     upper_bound = initial_loss * 1.2  # Set upper bound to 20% above the initial loss
@@ -126,7 +126,7 @@ def main(config_file=None):
     ax.set_ylim(lower_bound, upper_bound)  # Set the upper bound
     ax.legend(loc='upper right', fontsize=10)
     fig.subplots_adjust(top=0.99, bottom=0.155, left=0.12, right=0.99)
-    fig.savefig('figures/' + outfilename + '.pdf', format='pdf', bbox_inches='tight')
+    fig.savefig('figures/' + outfilename + '-muon.pdf', format='pdf', bbox_inches='tight')
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Plotting gpt_distill outputs.')
