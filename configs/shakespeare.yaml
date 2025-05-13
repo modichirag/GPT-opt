@@ -59,7 +59,7 @@ training_params:
   tensorcore_precision: high   #Can be highest, high, or medium
   autocast: True
   mixed_precision: bfloat16
-  compile: False
+  compile: True
 
 logging_params:
   val_tokens_processed: 2048 #2^23

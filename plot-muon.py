@@ -7,6 +7,7 @@ from gptopt.plot_utils import get_alpha_from_lr, percentage_of_epoch, plot_data,
 import copy
 import json
 import os
+import numpy as np
 
 plt.rcParams["font.family"] = "serif"
 plt.rcParams['font.size'] = 12
@@ -29,7 +30,8 @@ def plot_final_loss_vs_lr(outputs, colormap, outfilename, val=False, line_styles
     """Plot final loss versus learning rate as lines for each method."""
     fig, ax = plt.subplots(figsize=(6, 4))
     methods = {}
-
+    if val:
+        print("plotting validation loss")
     # Group final losses and learning rates by method
     for output in outputs:
         name, lr = output['name'].split('-lr-')
@@ -44,25 +46,37 @@ def plot_final_loss_vs_lr(outputs, colormap, outfilename, val=False, line_styles
             methods[name] = {'lrs': [], 'losses': []}
         methods[name]['lrs'].append(lr)
         methods[name]['losses'].append(final_loss)
+        methods[name]['time'] =   np.sum(output['step_times'])
+            
 
     # Plot each method as a line
+    all_losses = []  # To store all loss values for determining ylim
     for name, data in methods.items():
         sorted_indices = sorted(range(len(data['lrs'])), key=lambda i: data['lrs'][i])  # Sort by learning rate
         sorted_lrs = [data['lrs'][i] for i in sorted_indices]
         sorted_losses = [data['losses'][i] for i in sorted_indices]
-        ax.plot(sorted_lrs, sorted_losses, label=name, color=colormap[name], linestyle = line_styles[name], linewidth=2)
+        min_loss = min(sorted_losses)
+
+        print("{} : Best loss {} and time {}".format(name, min_loss, methods[name]['time'] ))
+        all_losses.extend(sorted_losses)  # Collect all losses
+        ax.plot(sorted_lrs, sorted_losses, label=name, color=colormap[name], linestyle=line_styles[name], linewidth=2)
+
+    # Automatically set ylim
+    if all_losses:
+        min_loss = min(all_losses)
+        ax.set_ylim(bottom=min_loss * 0.98)  # Set lower ylim to 10% below the smallest loss
 
     ax.set_xscale('log')
     ax.set_xlabel('Learning Rate')
     if val:
         ax.set_ylabel('Final Validation Loss')
-        plotfile = 'figures/' + outfilename + '-lr-sens'  + '-val' + '.pdf'
+        plotfile = 'figures/' + outfilename + '-lr-sens' + '-val' + '.pdf'
     else:
         ax.set_ylabel('Final Loss')
         plotfile = 'figures/' + outfilename + '-lr-sens' + '.pdf'
     ax.legend(loc='upper right', fontsize=10)
     ax.grid(axis='both', lw=0.2, ls='--', zorder=0)
-    ax.set_ylim(top=7)
+    ax.set_ylim(top=4.5)  # Keep the upper limit fixed
     fig.subplots_adjust(top=0.95, bottom=0.15, left=0.15, right=0.95)
     fig.savefig(plotfile, format='pdf', bbox_inches='tight')
 
@@ -88,15 +102,18 @@ def main(config_file=None):
     method_colors = {}  # Dictionary to store assigned colors for methods
     line_styles = {}  # Dictionary to store assigned line styles for methods
     muon_outputs = []
+
     for output in outputs:
+        # if 'compact' not in output['name']:  #and 'keller' not in output['name']:
+        #     continue
         name, lr = output['name'].split('-lr-')
-        if name.startswith("muon*-"):
+        if name.startswith("muon"):
             muon_outputs.append(output)  # Store the output for this method
-        if name.startswith("muon*-") and name not in method_colors:
+        if name.startswith("muon") and name not in method_colors:
             method_colors[name] = color_list[color_index % len(color_list)]
             line_styles[name] = line_style_list[color_index % len(line_style_list)]
             color_index += 1
-
+    # import pdb; pdb.set_trace()
     outputs = muon_outputs
     # Collect learning rate ranges for each method
     lr_ranges = {}
@@ -127,6 +144,12 @@ def main(config_file=None):
     ax.legend(loc='upper right', fontsize=10)
     fig.subplots_adjust(top=0.99, bottom=0.155, left=0.12, right=0.99)
     fig.savefig('figures/' + outfilename + '-muon.pdf', format='pdf', bbox_inches='tight')
+
+    plot_data(ax, outputs, config['training_params']['num_epochs'], 'losses', 'Loss', method_colors, line_styles, lr_ranges, get_alpha_from_lr, time = True)
+    ax.set_ylim(lower_bound, upper_bound)  # Set the upper bound
+    ax.legend(loc='upper right', fontsize=10)
+    fig.subplots_adjust(top=0.99, bottom=0.155, left=0.12, right=0.99)
+    fig.savefig('figures/' + outfilename + '-time-muon.pdf', format='pdf', bbox_inches='tight')
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Plotting gpt_distill outputs.')

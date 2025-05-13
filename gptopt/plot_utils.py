@@ -1,6 +1,6 @@
 import numpy as np
 
-def get_alpha_from_lr(lr, min_alpha=0.3, max_alpha=1.0, lr_range=None):
+def get_alpha_from_lr(lr, min_alpha=0.5, max_alpha=1.0, lr_range=None):
     """Calculate alpha transparency based on the base learning rate."""
     if lr_range and lr_range[0] == lr_range[1]:  # Single learning rate case
         return max_alpha
@@ -12,7 +12,9 @@ def percentage_of_epoch(output, field, num_epochs):
     percentages = [i / total_iterations * num_epochs for i in range(total_iterations)]
     return percentages
 
-def plot_data(ax, outputs, num_epochs, field, ylabel, colormap, linestylemap, lr_ranges, alpha_func, zorder_func=None):
+
+
+def plot_data(ax, outputs, num_epochs, field, ylabel, colormap, linestylemap, lr_ranges, alpha_func, zorder_func=None, time=False):
     """Generalized function to plot data."""
     plotted_methods = set()
     for output in outputs:
@@ -28,7 +30,12 @@ def plot_data(ax, outputs, num_epochs, field, ylabel, colormap, linestylemap, lr
                 label = f"{name} lr in [{lr_ranges[name][0]:.4f}, {lr_ranges[name][1]:.4f}]"
 
         zorder = zorder_func(name) if zorder_func else 1
-        ax.plot(percentage_of_epoch(output, field, num_epochs=num_epochs),
+        scale = 1
+        if time:
+            scale = np.sum(output['step_times'])
+        x_values = percentage_of_epoch(output, field, num_epochs=num_epochs)
+        x_values = [x * scale for x in x_values]
+        ax.plot(x_values,
                 output[field],
                 label=label,
                 color=colormap[name],
@@ -37,8 +44,10 @@ def plot_data(ax, outputs, num_epochs, field, ylabel, colormap, linestylemap, lr
                 alpha=alpha,
                 zorder=zorder)
         plotted_methods.add(name)
-
-    ax.set_xlabel('Epoch')
+    if time:
+        ax.set_xlabel('Time (s)')
+    else:
+        ax.set_xlabel('Epoch')
     ax.set_ylabel(ylabel)
     ax.grid(axis='both', lw=0.2, ls='--', zorder=0)
 

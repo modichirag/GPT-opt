@@ -85,6 +85,18 @@ for opt_config in list_optimizer_params:
             file_name = file_name  +'-defl-' +str(polar_params['deflation_eps'])
             file_name = file_name  +'-cush-' +str(polar_params['polynomial_params']['cushion'])
             file_name = f"{file_name}-lr-{lr}-{opt_config['lr_schedule']}-{config_hash}-world{world_size}"
+        elif "muon-pe" in opt_config['name']:
+            polar_params = opt_config['polar_params']  
+            file_name = opt_config['name'] + '-frob-' +str(polar_params['frob_eps'])
+            file_name = opt_config['name'] + '-cent-' +str(polar_params['centered'])    
+            file_name = file_name  +'-defl-' +str(polar_params['deflation_eps'])
+            file_name = f"{file_name}-lr-{lr}-{opt_config['lr_schedule']}-{config_hash}-world{world_size}"
+        elif "muon-compact" in opt_config['name']:
+            polar_params = opt_config['polar_params']   
+            file_name = opt_config['name'] + '-pin-' +str(polar_params['pinpoint_top'])
+            file_name = '-fa-' +str(polar_params['fast_apply_restart']) 
+            file_name = file_name  +'-defl-' +str(polar_params['deflation_eps'])
+            file_name = f"{file_name}-lr-{lr}-{opt_config['lr_schedule']}-{config_hash}-world{world_size}"
         else:
             file_name = f"{opt_config['name']}-lr-{lr}-{opt_config['lr_schedule']}-{config_hash}-world{world_size}"
         if args.suffix != '': file_name += f"-{args.suffix}"
@@ -118,6 +130,10 @@ for opt_config in list_optimizer_params:
                 logger.name = logger.name  +'-abs_low-' +str(polar_params['normalizer_params']['absolute_lower_bound'])
                 logger.name = logger.name  +'-defl-' +str(polar_params['deflation_eps'])
                 logger.name = logger.name  +'-cush-' +str(polar_params['polynomial_params']['cushion'])
+                logger.name = logger.name  +'-lr-' + str(lr)
+            elif 'muon-compact' in opt_config['name']:
+                polar_params = opt_config['polar_params']   
+                logger.name = opt_config['name'] + '-pin-' +str(polar_params['pinpoint_top'])
                 logger.name = logger.name  +'-lr-' + str(lr)
             else:
                 logger.name = opt_config['name'] + '-lr-' + str(lr)

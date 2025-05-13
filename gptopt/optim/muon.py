@@ -8,7 +8,8 @@ import math
 import warnings
 from gptopt.optim.polar_express import PolynomialPolarFactorizer
 from gptopt.optim.polar_express import Keller, Pole, Jiacheng, NewtonSchultz,SmartNormalizer, FrobeniusNormalizer
-# @torch.compile
+from gptopt.optim.ours_compact import PolarExpress, ours_compact
+@torch.compile
 def zeropower_via_newtonschulz5(G, steps):
     """
     Newton-Schulz iteration to compute the zeroth power / orthogonalization of G. We opt to use a
@@ -144,6 +145,18 @@ class Muon(torch.optim.Optimizer):
                 use_fast_apply=polar_params.get("use_fast_apply", False),
                 deflation_eps=polar_params.get("deflation_eps", 0),
                 cast=polar_params.get("cast", None)
+            )
+        elif polar_method == "ours_compact":
+            return lambda G, steps : ours_compact(G , steps,
+                                                deflation_eps=polar_params.get("deflation_eps", 0.01),
+                                                fast_apply_restart = polar_params.get("fast_apply_restart", 1),
+                                                pinpoint_top=polar_params.get("pinpoint_top", True)
+            )
+        elif polar_method == "PolarExpress":
+            return lambda G, steps : PolarExpress(G , steps,
+                                                frob_eps=polar_params.get("frob_eps", 0.01), 
+                                                deflation_eps=polar_params.get("deflation_eps", 0.01),
+                                                centered=polar_params.get("centered", True)
             )
         elif polar_method == "Pole":
             return PolynomialPolarFactorizer(

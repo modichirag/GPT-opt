@@ -7,6 +7,7 @@ from gptopt.plot_utils import get_alpha_from_lr, percentage_of_epoch, plot_data,
 import copy
 import json
 import os
+import numpy as np
 
 plt.rcParams["font.family"] = "serif"
 plt.rcParams['font.size'] = 12
@@ -50,7 +51,7 @@ def plot_final_loss_vs_lr(outputs, colormap, outfilename, val=False):
         sorted_indices = sorted(range(len(data['lrs'])), key=lambda i: data['lrs'][i])  # Sort by learning rate
         sorted_lrs = [data['lrs'][i] for i in sorted_indices]
         sorted_losses = [data['losses'][i] for i in sorted_indices]
-        ax.plot(sorted_lrs, sorted_losses, label=name, color=colormap[name], linewidth=2)
+        ax.plot(sorted_lrs, sorted_losses, alpha= 0.85, label=name, color=colormap[name], linewidth=2)
 
     ax.set_xscale('log')
     ax.set_xlabel('Learning Rate')
@@ -62,7 +63,7 @@ def plot_final_loss_vs_lr(outputs, colormap, outfilename, val=False):
         plotfile = 'figures/' + outfilename + '-lr-sens' + '.pdf'
     ax.legend(loc='upper right', fontsize=10)
     ax.grid(axis='both', lw=0.2, ls='--', zorder=0)
-    # ax.set_ylim(top=7)
+    ax.set_ylim(top=5)
     fig.subplots_adjust(top=0.95, bottom=0.15, left=0.15, right=0.95)
     fig.savefig(plotfile, format='pdf', bbox_inches='tight')
 
@@ -85,8 +86,8 @@ def main(config_file=None):
                 'adamw': '#FF6B35',
                 'adam-sch': '#FF6B35',
                 'momo': '#61ACE5',
-                'momo-adam': '#00518F',
-                'teacher': 'k',
+                'muon-compact': '#00518F',
+                'muon-pe': '#B3CBB9',
                 'muon-jiacheng': '#8A2BE2',  # Added a new color for "muon" (blue-violet)
                 'muon*': 'k',
                 'muon-newtonschultz': '#008000',
@@ -95,8 +96,8 @@ def main(config_file=None):
     linestylemap = {'momo': None,
                     'sgd-m': None,
                     'sgd-sch': '--',
-                    'teacher': '--',
-                    'momo-adam': None,
+                    'muon-pe': '--',
+                    'muon-compact': None,
                     'adam': None,
                     'adamw': None,
                     'adam-sch': '--',
@@ -113,6 +114,10 @@ def main(config_file=None):
         if 'muon*' in name:
             name = 'muon*'
             output['name'] = 'muon*' + '-lr-' + lr  # Update the name to 'muon*'
+        elif 'muon-compact' in name:
+            name = 'muon-compact'
+            output['name'] = 'muon-compact' + '-lr-' + lr
+            
         lr = float(lr)
         if name not in lr_ranges:
             lr_ranges[name] = [lr, lr]
