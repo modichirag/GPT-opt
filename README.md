@@ -27,7 +27,7 @@ python3 plot.py --config configs/shakespeare.yaml
 # On the cluster
 ### srun
 ```bash
-srun --gpus=1 --cpus-per-gpu=8 --time=150:00:00 --partition=gpu --constraint=a100 --pty bash
+srun --gpus=1 --cpus-per-gpu=8 --time=5:00:00 --partition=gpu  --pty bash
 module load python
 ```
 

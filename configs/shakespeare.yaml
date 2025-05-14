@@ -35,18 +35,16 @@ optimizer_params:
   #     use_fast_apply: False
   #     deflation_eps: 0.001
 
-  - name: muon*
-    lr: [0.0005, 0.001, 0.005, 0.01, 0.05]
+  - name: muon-compact
+    # lr: [ 0.02]
+    lr: [ 0.001, 0.005, 0.01,    0.05]
     weight_decay: 0.1
-    lr_schedule: warm-up-cosine
-    warm_up_fraction: 0.1
+    lr_schedule: constant-linear
+    warm_up_fraction: 0.4
     polar_params:
-      normalizer_params: 
-        absolute_lower_bound: 0.001 
-      use_fast_apply: False
-      deflation_eps: 0.001 
-      polynomial_params: 
-        cushion: 0.01
+      deflation_eps: 0.01
+      pinpoint_top: True
+      fast_apply_restart: 3
 
 
 training_params:

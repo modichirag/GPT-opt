@@ -88,14 +88,14 @@ for opt_config in list_optimizer_params:
         elif "muon-pe" in opt_config['name']:
             polar_params = opt_config['polar_params']  
             file_name = opt_config['name'] + '-frob-' +str(polar_params['frob_eps'])
-            file_name = opt_config['name'] + '-cent-' +str(polar_params['centered'])    
+            file_name = file_name + '-cent-' +str(polar_params['centered'])    
             file_name = file_name  +'-defl-' +str(polar_params['deflation_eps'])
             file_name = f"{file_name}-lr-{lr}-{opt_config['lr_schedule']}-{config_hash}-world{world_size}"
         elif "muon-compact" in opt_config['name']:
             polar_params = opt_config['polar_params']   
             file_name = opt_config['name'] + '-pin-' +str(polar_params['pinpoint_top'])
-            file_name = '-fa-' +str(polar_params['fast_apply_restart']) 
-            file_name = file_name  +'-defl-' +str(polar_params['deflation_eps'])
+            file_name = file_name + '-fa-' +str(polar_params['fast_apply_restart']) 
+            file_name = file_name +'-defl-' +str(polar_params['deflation_eps'])
             file_name = f"{file_name}-lr-{lr}-{opt_config['lr_schedule']}-{config_hash}-world{world_size}"
         else:
             file_name = f"{opt_config['name']}-lr-{lr}-{opt_config['lr_schedule']}-{config_hash}-world{world_size}"
@@ -134,6 +134,8 @@ for opt_config in list_optimizer_params:
             elif 'muon-compact' in opt_config['name']:
                 polar_params = opt_config['polar_params']   
                 logger.name = opt_config['name'] + '-pin-' +str(polar_params['pinpoint_top'])
+                logger.name = logger.name  +'-fa-' +str(polar_params['fast_apply_restart'])
+                logger.name = logger.name  +'-defl-' +str(polar_params['deflation_eps'])
                 logger.name = logger.name  +'-lr-' + str(lr)
             else:
                 logger.name = opt_config['name'] + '-lr-' + str(lr)

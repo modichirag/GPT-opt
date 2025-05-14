@@ -3,7 +3,8 @@ import argparse
 import matplotlib.pyplot as plt
 from matplotlib.ticker import ScalarFormatter
 from gptopt.utils import get_default_config, load_config
-from gptopt.plot_utils import get_alpha_from_lr, percentage_of_epoch, plot_data, plot_step_size_and_lr, smoothen_dict
+from gptopt.plot_utils import  percentage_of_epoch, plot_data, plot_step_size_and_lr, smoothen_dict
+import matplotlib as mpl
 import copy
 import json
 import os
@@ -70,10 +71,10 @@ def plot_final_loss_vs_lr(outputs, colormap, outfilename, val=False, line_styles
     ax.set_xlabel('Learning Rate')
     if val:
         ax.set_ylabel('Final Validation Loss')
-        plotfile = 'figures/' + outfilename + '-lr-sens' + '-val' + '.pdf'
+        plotfile = 'figures/' + outfilename + '-lr-sens-muon' + '-val' + '.pdf'
     else:
         ax.set_ylabel('Final Loss')
-        plotfile = 'figures/' + outfilename + '-lr-sens' + '.pdf'
+        plotfile = 'figures/' + outfilename + '-lr-sens-muon' + '.pdf'
     ax.legend(loc='upper right', fontsize=10)
     ax.grid(axis='both', lw=0.2, ls='--', zorder=0)
     ax.set_ylim(top=4.5)  # Keep the upper limit fixed
@@ -102,7 +103,6 @@ def main(config_file=None):
     method_colors = {}  # Dictionary to store assigned colors for methods
     line_styles = {}  # Dictionary to store assigned line styles for methods
     muon_outputs = []
-
     for output in outputs:
         # if 'compact' not in output['name']:  #and 'keller' not in output['name']:
         #     continue
@@ -113,42 +113,43 @@ def main(config_file=None):
             method_colors[name] = color_list[color_index % len(color_list)]
             line_styles[name] = line_style_list[color_index % len(line_style_list)]
             color_index += 1
-    # import pdb; pdb.set_trace()
+
     outputs = muon_outputs
-    # Collect learning rate ranges for each method
-    lr_ranges = {}
-    for output in outputs:
-        name, lr = output['name'].split('-lr-')
-        lr = float(lr)
-        if name not in lr_ranges:
-            lr_ranges[name] = [lr, lr]
-        else:
-            lr_ranges[name][0] = min(lr_ranges[name][0], lr)
-            lr_ranges[name][1] = max(lr_ranges[name][1], lr)
-
-    # Michael: Temporarily resetting matplotlib settings to default so that latex doesn't
-    # need to be used for plot formatting. Was giving me an error.
-    import matplotlib as mpl
     mpl.rcParams.update(mpl.rcParamsDefault)
-
     # Plot final loss vs learning rate
     plot_final_loss_vs_lr(outputs, method_colors, outfilename, line_styles = line_styles)
     plot_final_loss_vs_lr(outputs, method_colors, outfilename, val=True, line_styles = line_styles)
     # Plot loss
-    initial_loss = outputs[0]['losses'][0] if outputs and 'losses' in outputs[0] else 1.0  # Default to 1.0 if not available
+    # Select only the output for each method with the best final validation loss
+    best_outputs = {}
+    best_lr = {}
+    for output in outputs:
+        name, lr = output['name'].split('-lr-')
+        if 'val_losses' not in output:
+            continue
+        final_val_loss = output['val_losses'][-1]
+        if name not in best_outputs or final_val_loss < best_outputs[name]['val_losses'][-1]:
+            best_outputs[name] = output
+            lr = float(lr)
+            best_lr[name] = [lr, lr] 
+
+    selected_outputs = list(best_outputs.values())
+    get_alpha_from_lr = lambda lr, lr_range: 0.85
+    initial_loss = selected_outputs[0]['losses'][0] if selected_outputs and 'losses' in selected_outputs[0] else 1.0  # Default to 1.0 if not available
     upper_bound = initial_loss * 1.2  # Set upper bound to 20% above the initial loss
     fig, ax = plt.subplots(figsize=(4, 3))
-    plot_data(ax, outputs, config['training_params']['num_epochs'], 'losses', 'Loss', method_colors, line_styles, lr_ranges, get_alpha_from_lr)
-    lower_bound = min(min(output['losses']) for output in outputs if 'losses' in output)
+    plot_data(ax, selected_outputs, config['training_params']['num_epochs'], 'losses', 'Loss', method_colors, line_styles, best_lr, get_alpha_from_lr)
+    lower_bound = min(min(output['losses']) for output in selected_outputs if 'losses' in output)
     ax.set_ylim(lower_bound, upper_bound)  # Set the upper bound
-    ax.legend(loc='upper right', fontsize=10)
-    fig.subplots_adjust(top=0.99, bottom=0.155, left=0.12, right=0.99)
+    ax.legend(loc='center left', bbox_to_anchor=(1, 0.5), fontsize=10)  # Legend placed next to the figure
+    fig.subplots_adjust(top=0.99, bottom=0.155, left=0.12, right=0.8)  # Adjust right to make space for legend
     fig.savefig('figures/' + outfilename + '-muon.pdf', format='pdf', bbox_inches='tight')
 
-    plot_data(ax, outputs, config['training_params']['num_epochs'], 'losses', 'Loss', method_colors, line_styles, lr_ranges, get_alpha_from_lr, time = True)
+    fig, ax = plt.subplots(figsize=(4, 3))
+    plot_data(ax, selected_outputs, config['training_params']['num_epochs'], 'losses', 'Loss', method_colors, line_styles, best_lr, get_alpha_from_lr, time = True)
     ax.set_ylim(lower_bound, upper_bound)  # Set the upper bound
-    ax.legend(loc='upper right', fontsize=10)
-    fig.subplots_adjust(top=0.99, bottom=0.155, left=0.12, right=0.99)
+    ax.legend(loc='center left', bbox_to_anchor=(1, 0.5), fontsize=10)  # Legend placed next to the figure
+    fig.subplots_adjust(top=0.99, bottom=0.155, left=0.12, right=0.8)  # Adjust right to make space for legend
     fig.savefig('figures/' + outfilename + '-time-muon.pdf', format='pdf', bbox_inches='tight')
 
 if __name__ == "__main__":
