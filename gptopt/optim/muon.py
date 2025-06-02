@@ -58,11 +58,14 @@ class Muon(torch.optim.Optimizer):
         momentum: The momentum used by the internal SGD. (0.95 is a good default)
         nesterov: Whether to use Nesterov-style momentum in the internal SGD. (recommended)
         ns_steps: The number of Newton-Schulz iterations to run. (6 is probably always enough)
-        rms_scaling: Whether to scale each layer's LR by sqrt(fan_out/fan_in), which
-        comes from choosing the RMS norm instead of L2 norm for steepest descent.
-        nuclear_scaling: Whether to scale each layer's LR by the nuclear norm of the
-        gradient, which comes from choosing the L2 norm for the product space over
-        layers instead of the max norm.
+        lmo: Whether to use LMO instead variational viewpoint of gradient descent to derive
+        update rule. If lmo=False, update is additionally scaled by the dual norm of the
+        gradient.
+        l2_prod_norm: Whether to use the L2 norm for the product space over layers
+        instead of the max norm, which scales each layer's LR by the nuclear norm of the
+        gradient.
+        rms_layer_norm: Whether to use the RMS norm the input/output space of each
+        layer, which scale each layer's LR by sqrt(fan_out/fan_in).
         adamw_params: The parameters to be optimized by AdamW. Any parameters in `muon_params` which are
         {0, 1}-D or are detected as being the embed or lm_head will be optimized by AdamW as well.
         adamw_lr: The learning rate for the internal AdamW.
@@ -77,8 +80,9 @@ class Muon(torch.optim.Optimizer):
                  momentum=0.95,
                  nesterov=True,
                  ns_steps=5,
-                 rms_scaling=True,
-                 nuclear_scaling=False,
+                 lmo=True,
+                 l2_prod_norm=False,
+                 rms_layer_norm=False,
                  adamw_betas=(0.95, 0.95),
                  adamw_eps=1e-8):
             
@@ -88,8 +92,9 @@ class Muon(torch.optim.Optimizer):
                 momentum=momentum,
                 nesterov=nesterov,
                 ns_steps=ns_steps,
-                rms_scaling=rms_scaling,
-                nuclear_scaling=nuclear_scaling,
+                lmo=lmo,
+                l2_prod_norm=l2_prod_norm,
+                rms_layer_norm=rms_layer_norm,
                 adamw_betas=adamw_betas,
                 adamw_eps=adamw_eps,
         )
@@ -120,15 +125,6 @@ class Muon(torch.optim.Optimizer):
                 # Do not use Muon for parameters in adamw_params
                 self.state[p]["use_muon"] = False
 
-    def adjust_lr_for_muon(self, lr, rms_scaling, nuclear_scaling, param_shape, grad, grad_sign):
-        scale = 1.0
-        if rms_scaling:
-            fan_out, fan_in = param_shape[:2]
-            scale *= math.sqrt(fan_out / fan_in)
-        if nuclear_scaling:
-            scale *= torch.trace(grad.T @ grad_sign)
-        return lr * scale
-
     def step(self, closure=None):
         """Perform a single optimization step.
             Args:
@@ -150,20 +146,30 @@ class Muon(torch.optim.Optimizer):
             lr = group["lr"]
             wd = group["wd"]
             momentum = group["momentum"]
+            lmo = group["lmo"]
+            l2_prod_norm = group["l2_prod_norm"]
+            rms_layer_norm = group["rms_layer_norm"]
 
-            # generate weight updates in distributed fashion
-            for p in params:
+            # initial pass over parameters to compute update direction and LR scalings.
+            # Warning for the future: if we ever use more than one param group, these
+            # scalings are not going to behave exactly right. Here we compute scaling
+            # factors that depend on all layers of the network, so we assume that all
+            # layers of the network are inside the current param group.
+            layer_nuc_norms = None
+            for i, p in enumerate(params):
+
                 # sanity check
                 g = p.grad
-                
                 if g is None:
                     continue
                 if g.ndim > 2:
                     g = g.view(g.size(0), -1)
-
                 assert g is not None
-                
-                # calc update
+
+                # temporarily store part of gradient to check later
+                pass
+
+                # calc update.
                 state = self.state[p]
                 if "momentum_buffer" not in state:
                     state["momentum_buffer"] = torch.zeros_like(g)
@@ -173,21 +179,62 @@ class Muon(torch.optim.Optimizer):
                     g = g.add(buf, alpha=momentum)
                 else:
                     g = buf
+
+                # temporarily store part of gradient again to check later
+                pass
+
+                if lmo and not l2_prod_norm:
+                    # if update does not depend on nuclear norms of gradients, quit now
+                    # to avoid unnecessary calculations.
+                    continue
                 u = zeropower_via_newtonschulz5(g, steps=group["ns_steps"])
-                
-                # scale update
-                adjusted_lr = self.adjust_lr_for_muon(
-                    lr,
-                    group["rms_scaling"],
-                    group["nuclear_scaling"],
-                    p.shape,
-                    g.bfloat16(), # convert to float16 to be compatible with u
-                    u
-                )
-                
+
+                # compute nuclear norms for each layer. Gotta do some case analysis
+                # here depending on combination of options for l2 vs. max product norm
+                # and lmo vs. variational veiewpoint.
+                if layer_nuc_norms is None:
+                    layer_nuc_norms = torch.zeros(len(params), device=p.device)
+                layer_nuc_norms[i] = torch.trace(g.bfloat16().T @ u) # should we cast g to 16-bit here or can we just do it once earlier?
+                if rms_layer_norm:
+                    fan_out, fan_in = p.shape[:2]
+                    layer_nuc_norms[i] *= math.sqrt(fan_out / fan_in)
+
+            # compute lr scaling factors that depend on all layers. doing this here so
+            # we don't recompute this for every layer unnecessarily.
+            if lmo and l2_prod_norm:
+                global_dual_norm = torch.linalg.vector_norm(layer_nuc_norms, ord=2)
+            if not lmo and not l2_prod_norm:
+                global_dual_norm = torch.sum(layer_nuc_norms)
+
+            # apply weight updates
+            for i, p in enumerate(params):
+
+                # check that p.grad matches what we expect from previous two stores
+                pass
+
+                # calc update. Note that we already computed and stored the momentum
+                # term before, but we are re-computing the matrix sign. This is
+                # suboptimal w.r.t.  time but doesn't use any extra memory. We can
+                # always tweak this later.
+                u = zeropower_via_newtonschulz5(p.grad, steps=group["ns_steps"])
+
+                # apply scaling factors to lr depending on steepest descent variations
+                lr_scale = 1.0
+                if lmo and not l2_prod_norm:
+                    if rms_layer_norm:
+                        fan_out, fan_in = p.shape[:2]
+                        lr_scale = math.sqrt(fan_out / fan_in)
+                if lmo and l2_prod_norm:
+                    lr_scale = layer_nuc_norms[i] / global_dual_norm
+                if not lmo and not l2_prod_norm:
+                    lr_scale = global_dual_norm
+                if not lmo and l2_prod_norm:
+                    lr_scale = layer_nuc_norms[i]
+                adjusted_lr = lr_scale * lr
+
                 # apply weight decay
                 p.data.mul_(1 - lr * wd)
-                
+
                 # apply update
                 p.data.add_(u, alpha=-adjusted_lr)
                 
