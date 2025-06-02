@@ -10,6 +10,41 @@ from gptopt.optim.polar_express import PolynomialPolarFactorizer
 from gptopt.optim.polar_express import Keller, Pole, Jiacheng, NewtonSchultz,SmartNormalizer, FrobeniusNormalizer
 from gptopt.optim.ours_compact import PolarExpress, ours_compact
 @torch.compile
+
+
+def jiacheng(G, steps):
+    """
+    Jiacheng optimized polynomials
+    """
+    assert len(G.shape) == 2
+    abc_list = [
+        (3955/1024, -8306/1024, 5008/1024),
+        (3735/1024, -6681/1024, 3463/1024),
+        (3799/1024, -6499/1024, 3211/1024),
+        (4019/1024, -6385/1024, 2906/1024),
+        (2677/1024, -3029/1024, 1162/1024),
+        (2172/1024, -1833/1024,  682/1024)
+    ]
+    X = G.bfloat16()
+    if G.size(0) > G.size(1):
+        X = X.T
+    # Ensure spectral norm is at most 1
+    X = X / (X.norm() + 1e-7)
+    # Perform the NS iterations
+    if steps > len(abc_list):
+        steps = len(abc_list)
+    for a, b, c in abc_list[:steps]:
+        A = X @ X.T
+        B = (
+            b * A + c * A @ A
+        )  # adapted from suggestion by @jxbz, @leloykun, and @YouJiacheng
+        X = a * X + B @ X
+
+    if G.size(0) > G.size(1):
+        X = X.T
+    return X
+
+
 def zeropower_via_newtonschulz5(G, steps):
     """
     Newton-Schulz iteration to compute the zeroth power / orthogonalization of G. We opt to use a
@@ -139,13 +174,7 @@ class Muon(torch.optim.Optimizer):
         elif polar_method == "Keller":
             return zeropower_via_newtonschulz5  # Use the method directly
         elif polar_method == "Jiacheng":
-            return PolynomialPolarFactorizer(
-                normalizer=FrobeniusNormalizer(**polar_params.get("normalizer_params", {})),
-                polynomial_sign_iteration=Jiacheng(**polar_params.get("polynomial_params", {})),
-                use_fast_apply=polar_params.get("use_fast_apply", False),
-                deflation_eps=polar_params.get("deflation_eps", 0),
-                cast=polar_params.get("cast", None)
-            )
+            return jiacheng
         elif polar_method == "ours_compact":
             return lambda G, steps : ours_compact(G , steps,
                                                 deflation_eps=polar_params.get("deflation_eps", 0.01),

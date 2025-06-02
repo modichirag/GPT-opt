@@ -135,19 +135,24 @@ def main(config_file=None):
 
     selected_outputs = list(best_outputs.values())
     get_alpha_from_lr = lambda lr, lr_range: 0.85
-    initial_loss = selected_outputs[0]['losses'][0] if selected_outputs and 'losses' in selected_outputs[0] else 1.0  # Default to 1.0 if not available
+    initial_loss = selected_outputs[0]['val_losses'][0] if selected_outputs and 'val_losses' in selected_outputs[0] else 1.0  # Default to 1.0 if not available
     upper_bound = initial_loss * 1.2  # Set upper bound to 20% above the initial loss
     fig, ax = plt.subplots(figsize=(4, 3))
-    plot_data(ax, selected_outputs, config['training_params']['num_epochs'], 'losses', 'Loss', method_colors, line_styles, best_lr, get_alpha_from_lr)
-    lower_bound = min(min(output['losses']) for output in selected_outputs if 'losses' in output)
-    ax.set_ylim(lower_bound, upper_bound)  # Set the upper bound
+    plot_data(ax, selected_outputs, config['training_params']['num_epochs'], 'val_losses', 'Val Loss', method_colors, line_styles, best_lr, get_alpha_from_lr)
+    lower_bound = min(min(output['val_losses']) for output in selected_outputs if 'val_losses' in output)
+    ax.set_ylim(lower_bound*0.95, lower_bound*1.1)  # Set the upper bound
+    ax.set_xlim(0.5, 1)
+    ax.set_yscale('log')
+    ax.set_xscale('log')
     ax.legend(loc='center left', bbox_to_anchor=(1, 0.5), fontsize=10)  # Legend placed next to the figure
     fig.subplots_adjust(top=0.99, bottom=0.155, left=0.12, right=0.8)  # Adjust right to make space for legend
     fig.savefig('figures/' + outfilename + '-muon.pdf', format='pdf', bbox_inches='tight')
 
     fig, ax = plt.subplots(figsize=(4, 3))
-    plot_data(ax, selected_outputs, config['training_params']['num_epochs'], 'losses', 'Loss', method_colors, line_styles, best_lr, get_alpha_from_lr, time = True)
-    ax.set_ylim(lower_bound, upper_bound)  # Set the upper bound
+    plot_data(ax, selected_outputs, config['training_params']['num_epochs'], 'val_losses', 'Val Loss', method_colors, line_styles, best_lr, get_alpha_from_lr, time = True)
+    ax.set_ylim(lower_bound*0.95, lower_bound*1.1)  # Set the upper bound
+    ax.set_yscale('log')
+    ax.set_xscale('log')
     ax.legend(loc='center left', bbox_to_anchor=(1, 0.5), fontsize=10)  # Legend placed next to the figure
     fig.subplots_adjust(top=0.99, bottom=0.155, left=0.12, right=0.8)  # Adjust right to make space for legend
     fig.savefig('figures/' + outfilename + '-time-muon.pdf', format='pdf', bbox_inches='tight')
