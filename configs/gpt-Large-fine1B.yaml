@@ -1,0 +1,71 @@
+# config.yaml
+optimizer_params:
+  - name: adamw
+    lr: [0.00005]
+    # lr: [0.0005, 0.001, 0.005, 0.01,  0.02]
+    weight_decay: 0.1
+    lr_schedule: constant-linear
+    warm_up_fraction: 0.4
+
+  # - name: muon-jiacheng
+  #   lr: [ 0.05]
+  #   # lr: [  0.005, 0.01,  0.02]
+  #   lr_schedule: constant-linear
+  #   warm_up_fraction: 0.4
+  #   ns_steps: 5
+  #   polar_params:
+  #     use_fast_apply: False
+
+  # - name: muon-keller
+  #   # lr: [ 0.05]squeue 
+  #   lr: [  0.02, 0.05]
+  #   weight_decay: 0.1
+  #   lr_schedule: constant-linear
+  #   warm_up_fraction: 0.4
+  #   ns_steps: 5
+
+  # - name: muon-compact
+  #   lr: [ 0.05]
+  #   weight_decay: 0.1
+  #   lr_schedule: constant-linear
+  #   warm_up_fraction: 0.4
+  #   ns_steps: 5
+  #   polar_params:
+  #     deflation_eps: 0.01
+  #     pinpoint_top: False
+  #     fast_apply_restart: 1
+
+
+training_params:
+  tokens_processed: 524288 # 2^18  # 524288 # 2^19
+  val_tokens_processed: 8388608 #2^23
+  batch_size: 16 # Could try also 64?
+  num_epochs: 1
+  context_length: 1024
+  gradnorm: 1.0
+  tensorcore_precision: high   #Can be highest, high, or medium
+  autocast: True
+  mixed_precision: bfloat16
+  compile: True
+
+logging_params:
+  val_tokens_processed: 8388608 #2^23
+  log_step: 50
+  val_step: 500
+  save_ckpt_step: 500
+  load_ckpt_step: 0
+  keep_last: 2
+  ckpt_dir: "/mnt/ceph/users/rgower/gptopt/"
+
+# Large: 774M params 
+# (n_embd: 1280, n_layer: 36, n_head: 20)
+
+gpt_model:
+  n_embd: 1280    
+  n_layer: 36   
+  n_head: 20    
+  vocab_size: 50257
+  flash_attention: True
+
+dataset:
+  name: "fineweb1B"
