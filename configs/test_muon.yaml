@@ -5,7 +5,7 @@ optimizer_params:
     weight_decay: 0
     lr_schedule: constant
 
-  - name: muon-lmo
+  - name: muon-nonlmo
     lr: [0.00003, 0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03]
     weight_decay: 0
     lr_schedule: constant
@@ -15,7 +15,27 @@ optimizer_params:
     weight_decay: 0
     lr_schedule: constant
 
-  - name: muon-lmo-l2_prod
+  - name: muon-nonlmo-l2_prod
+    lr: [0.00003, 0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03]
+    weight_decay: 0
+    lr_schedule: constant
+
+  - name: muon-rms
+    lr: [0.00003, 0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03]
+    weight_decay: 0
+    lr_schedule: constant
+
+  - name: muon-nonlmo-rms
+    lr: [0.00003, 0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03]
+    weight_decay: 0
+    lr_schedule: constant
+
+  - name: muon-l2_prod-rms
+    lr: [0.00003, 0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03]
+    weight_decay: 0
+    lr_schedule: constant
+
+  - name: muon-nonlmo-l2_prod-rms
     lr: [0.00003, 0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03]
     weight_decay: 0
     lr_schedule: constant

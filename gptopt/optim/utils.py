@@ -115,7 +115,7 @@ def get_optimizer(opt_config: dict, lr = 1e-3) -> Tuple[torch.optim.Optimizer, d
 
     elif 'muon' in name:
         opt_obj = Muon
-        lmo = 'lmo' in name
+        lmo = 'nonlmo' not in name
         l2_prod_norm = 'l2_prod' in name
         rms_layer_norm = 'rms' in name
         hyperp = {'lr': lr,

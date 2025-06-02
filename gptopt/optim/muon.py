@@ -164,37 +164,32 @@ class Muon(torch.optim.Optimizer):
                     continue
                 if g.ndim > 2:
                     g = g.view(g.size(0), -1)
-                assert g is not None
 
-                # temporarily store part of gradient to check later
-                pass
-
-                # calc update.
+                # calc momentum.
                 state = self.state[p]
                 if "momentum_buffer" not in state:
                     state["momentum_buffer"] = torch.zeros_like(g)
                 buf = state["momentum_buffer"]
                 buf.mul_(momentum).add_(g)
+
+                # quit now if update doesn't depend on nuclear norm of layer gradients.
+                if lmo and not l2_prod_norm:
+                    continue
+
+                # calc update.
                 if group["nesterov"]:
                     g = g.add(buf, alpha=momentum)
                 else:
                     g = buf
-
-                # temporarily store part of gradient again to check later
-                pass
-
-                if lmo and not l2_prod_norm:
-                    # if update does not depend on nuclear norms of gradients, quit now
-                    # to avoid unnecessary calculations.
-                    continue
                 u = zeropower_via_newtonschulz5(g, steps=group["ns_steps"])
 
                 # compute nuclear norms for each layer. Gotta do some case analysis
                 # here depending on combination of options for l2 vs. max product norm
                 # and lmo vs. variational veiewpoint.
+                # should we cast g to 16-bit here or can we just do it once earlier?
                 if layer_nuc_norms is None:
                     layer_nuc_norms = torch.zeros(len(params), device=p.device)
-                layer_nuc_norms[i] = torch.trace(g.bfloat16().T @ u) # should we cast g to 16-bit here or can we just do it once earlier?
+                layer_nuc_norms[i] = torch.trace(g.bfloat16().T @ u)
                 if rms_layer_norm:
                     fan_out, fan_in = p.shape[:2]
                     layer_nuc_norms[i] *= math.sqrt(fan_out / fan_in)
@@ -209,13 +204,22 @@ class Muon(torch.optim.Optimizer):
             # apply weight updates
             for i, p in enumerate(params):
 
-                # check that p.grad matches what we expect from previous two stores
-                pass
+                # sanity check
+                g = p.grad
+                if g is None:
+                    continue
+                if g.ndim > 2:
+                    g = g.view(g.size(0), -1)
 
                 # calc update. Note that we already computed and stored the momentum
                 # term before, but we are re-computing the matrix sign. This is
                 # suboptimal w.r.t.  time but doesn't use any extra memory. We can
                 # always tweak this later.
+                buf = self.state[p]["momentum_buffer"]
+                if group["nesterov"]:
+                    g = g.add(buf, alpha=momentum)
+                else:
+                    g = buf
                 u = zeropower_via_newtonschulz5(p.grad, steps=group["ns_steps"])
 
                 # apply scaling factors to lr depending on steepest descent variations

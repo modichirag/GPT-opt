@@ -87,9 +87,13 @@ def main(config_file=None):
                 'momo-adam': '#00518F',
                 'teacher': 'k',
                 'muon': '#8A2BE2',  # Added a new color for "muon" (blue-violet)
-                'muon-rms': '#FFFF00',
-                'muon-nuclear': '#008000',
-                'muon-rms-nuclear': '#FF0000',
+                'muon-nonlmo': '#FFFF00',
+                'muon-l2_prod': '#008000',
+                'muon-nonlmo-l2_prod': '#FF0000',
+                'muon-rms': '#7FFFD4',
+                'muon-nonlmo-rms': '#BE6400',
+                'muon-l2_prod-rms': '#FF00FF',
+                'muon-nonlmo-l2_prod-rms': '#FFD700',
     }
     linestylemap = {'momo': None,
                     'sgd-m': None,
@@ -100,9 +104,13 @@ def main(config_file=None):
                     'adamw': None,
                     'adam-sch': '--',
                     'muon': None,
+                    'muon-nonlmo': None,
+                    'muon-l2_prod': None,
+                    'muon-nonlmo-l2_prod': None,
                     'muon-rms': None,
-                    'muon-nuclear': None,
-                    'muon-rms-nuclear': None,
+                    'muon-nonlmo-rms': None,
+                    'muon-l2_prod-rms': None,
+                    'muon-nonlmo-l2_prod-rms': None,
     }
 
     # Collect learning rate ranges for each method
