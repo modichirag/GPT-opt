@@ -5,8 +5,8 @@
 #SBATCH --constraint=h100
 #SBATCH --gpus-per-task=1
 #SBATCH --cpus-per-task=2
-#SBATCH --time=4:00:00
-#SBATCH -o logs/r%x.o%j
+#SBATCH --time=12:00:00
+#SBATCH -o output/slurm_logs/fineweb1B_constant-linear.log
 
 export OMP_NUM_THREADS=1
 
@@ -17,4 +17,4 @@ export OMP_NUM_THREADS=1
 module load python
 source gptopt/bin/activate
 
-time torchrun --standalone --nproc_per_node=4 run.py --config configs/fineweb1B_1.yaml
+time torchrun --standalone --nproc_per_node=4 run.py --config configs/fineweb1B.yaml
