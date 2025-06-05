@@ -220,7 +220,7 @@ class Muon(torch.optim.Optimizer):
                     g = g.add(buf, alpha=momentum)
                 else:
                     g = buf
-                u = zeropower_via_newtonschulz5(p.grad, steps=group["ns_steps"])
+                u = zeropower_via_newtonschulz5(g, steps=group["ns_steps"])
 
                 # apply scaling factors to lr depending on steepest descent variations
                 lr_scale = 1.0
