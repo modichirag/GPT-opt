@@ -12,7 +12,7 @@ def percentage_of_epoch(output, field, num_epochs):
     percentages = [i / total_iterations * num_epochs for i in range(total_iterations)]
     return percentages
 
-def plot_data(ax, outputs, num_epochs, field, ylabel, colormap, linestylemap, lr_ranges, alpha_func, zorder_func=None):
+def plot_data(ax, outputs, num_epochs, field, ylabel, colormap, linestylemap, lr_ranges, alpha_func, zorder_func=None, wallclock=False):
     """Generalized function to plot data."""
     plotted_methods = set()
     for output in outputs:
@@ -28,7 +28,17 @@ def plot_data(ax, outputs, num_epochs, field, ylabel, colormap, linestylemap, lr
                 label = f"{name} lr in [{lr_ranges[name][0]:.4f}, {lr_ranges[name][1]:.4f}]"
 
         zorder = zorder_func(name) if zorder_func else 1
-        ax.plot(percentage_of_epoch(output, field, num_epochs=num_epochs),
+
+        if wallclock:
+            assert len(output["step_times"]) % len(output[field]) == 0
+            step_factor = len(output["step_times"]) // len(output[field])
+            step_times = np.array(output["step_times"])
+            step_times = np.sum(step_times.reshape((len(output[field]), step_factor)), axis=1)
+            xs = np.cumsum(step_times)
+        else:
+            xs = percentage_of_epoch(output, field, num_epochs=num_epochs)
+
+        ax.plot(xs,
                 output[field],
                 label=label,
                 color=colormap[name],
@@ -38,7 +48,8 @@ def plot_data(ax, outputs, num_epochs, field, ylabel, colormap, linestylemap, lr
                 zorder=zorder)
         plotted_methods.add(name)
 
-    ax.set_xlabel('Epoch')
+    xlabel = "Seconds" if wallclock else "Epochs"
+    ax.set_xlabel(xlabel)
     ax.set_ylabel(ylabel)
     ax.grid(axis='both', lw=0.2, ls='--', zorder=0)
 
@@ -114,6 +125,11 @@ def smoothen_dict(dict, num_points, beta= 0.05):
     for key in dict.keys():
         if key == 'losses':
             dict[key] = smoothen_curve_exp(dict[key], num_points, beta = beta)
+        elif key == 'step_times':
+            # If smoothing losses, should also update step times so that indices line up
+            # when plotting against wallclock time. Not implementing this now because I
+            # turned off smoothing anyway.
+            raise NotImplementedError
 
         """
         Michael: Temporarily removing smoothing of step_size_list. smoothen_curve_exp is

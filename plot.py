@@ -7,6 +7,7 @@ from gptopt.plot_utils import get_alpha_from_lr, percentage_of_epoch, plot_data,
 import copy
 import json
 import os
+import numpy as np
 
 plt.rcParams["font.family"] = "serif"
 plt.rcParams['font.size'] = 12
@@ -24,6 +25,7 @@ def load_outputs(output_dir):
                 output = json.load(file)
                 outputs.append(output)
     return outputs
+
 
 def plot_final_loss_vs_lr(outputs, colormap, outfilename, val=False):
     """Plot final loss versus learning rate as lines for each method."""
@@ -65,6 +67,42 @@ def plot_final_loss_vs_lr(outputs, colormap, outfilename, val=False):
     fig.subplots_adjust(top=0.95, bottom=0.15, left=0.15, right=0.95)
     fig.savefig(plotfile, format='pdf', bbox_inches='tight')
 
+
+def plot_tuned_curves(outputs, colormap, linestylemap, outfilename, num_epochs, wallclock=False, val=False):
+    """Plot loss curves of tuned methods."""
+    fig, ax = plt.subplots(figsize=(6, 4))
+    tuned_methods = {}
+
+    # Find best lr for each method.
+    field = 'val_losses' if val else 'losses'
+    for output in outputs:
+        name, lr = output['name'].split('-lr-')
+        lr = float(lr)
+        final_loss = float(output[field][-1])
+        if name not in tuned_methods:
+            tuned_methods[name] = {'best_loss': final_loss, 'best_lr': lr, 'outputs': dict(output)}
+        else:
+            if final_loss < tuned_methods[name]['best_loss']:
+                tuned_methods[name]['best_loss'] = final_loss
+                tuned_methods[name]['best_lr'] = lr
+                tuned_methods[name]['outputs'] = dict(output)
+
+    # Plot loss of tuned methods.
+    tuned_outputs = [tuned_methods[name]['outputs'] for name in tuned_methods]
+    lr_ranges = {name: [tuned_methods[name]['best_lr']] * 2 for name in tuned_methods}
+    plot_data(ax, tuned_outputs, num_epochs, field, 'Loss', colormap, linestylemap, lr_ranges, get_alpha_from_lr, wallclock=wallclock)
+    upper_bound = np.max([output[field][round(0.2 * len(output[field]))] for output in tuned_outputs])
+    ax.legend(loc='upper right', fontsize=10)
+    ax.set_ylim(3.2, upper_bound)
+    fig.subplots_adjust(top=0.99, bottom=0.155, left=0.12, right=0.99)
+    suffix = "_tuned"
+    if wallclock:
+        suffix += "_wallclock"
+    if val:
+        suffix += "_val"
+    fig.savefig("figures/" + outfilename + suffix + '.pdf', format='pdf', bbox_inches='tight')
+
+
 def main(config_file=None):
     default_config = get_default_config()
     if config_file:
@@ -75,8 +113,11 @@ def main(config_file=None):
 
     print(f"Loaded {len(outputs)} outputs from {output_dir}")
 
+    # Michael: Turning off smoothing for now.
+    """
     for output in outputs:  # Smoothing
         smoothen_dict(output, num_points=100, beta =0.05)
+    """
 
     colormap = {'sgd-m': '#B3CBB9',
                 'sgd-sch': '#B3CBB9',
@@ -132,6 +173,7 @@ def main(config_file=None):
     # Plot final loss vs learning rate
     plot_final_loss_vs_lr(outputs, colormap, outfilename)
     plot_final_loss_vs_lr(outputs, colormap, outfilename, val=True)
+
     # Plot loss
     initial_loss = outputs[0]['losses'][0] if outputs and 'losses' in outputs[0] else 1.0  # Default to 1.0 if not available
     upper_bound = initial_loss * 1.2  # Set upper bound to 20% above the initial loss
@@ -144,7 +186,7 @@ def main(config_file=None):
     fig.savefig('figures/' + outfilename + '.pdf', format='pdf', bbox_inches='tight')
 
 
-        # Plot learning rates
+    # Plot learning rates
     for method_subset in [['sgd-m', 'sgd-sch', 'momo'], ['adam', 'adam-sch', 'momo-adam']]:
         fig, ax = plt.subplots(figsize=(4, 3))
         subset_outputs = [output for output in outputs if output['name'].split('-lr-')[0] in method_subset]
@@ -166,6 +208,13 @@ def main(config_file=None):
     ax.set_ylabel('Learning Rate')
     fig.subplots_adjust(top=0.99, bottom=0.155, left=0.12, right=0.99)
     fig.savefig('figures/step_size-' + outfilename + '.pdf', format='pdf', bbox_inches='tight')
+
+    # Plot loss curves of tuned algorithms.
+    plot_tuned_curves(outputs, colormap, linestylemap, outfilename, config['training_params']['num_epochs'], wallclock=False, val=False)
+    plot_tuned_curves(outputs, colormap, linestylemap, outfilename, config['training_params']['num_epochs'], wallclock=False, val=True)
+    plot_tuned_curves(outputs, colormap, linestylemap, outfilename, config['training_params']['num_epochs'], wallclock=True, val=False)
+    plot_tuned_curves(outputs, colormap, linestylemap, outfilename, config['training_params']['num_epochs'], wallclock=True, val=True)
+
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Plotting gpt_distill outputs.')
