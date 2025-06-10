@@ -118,6 +118,12 @@ def get_optimizer(opt_config: dict, lr = 1e-3) -> Tuple[torch.optim.Optimizer, d
         lmo = 'nonlmo' not in name
         l2_prod_norm = 'l2_prod' in name
         rms_layer_norm = 'rms' in name
+        if "nuc_fro" in name:
+            nuc_approx = "fro"
+        elif "nuc_past" in name:
+            nuc_approx = "past"
+        else:
+            nuc_approx = None
         hyperp = {'lr': lr,
                   'wd': opt_config.get('weight_decay', 0),
                   'adamw_betas': opt_config.get('betas', (0.95, 0.95)),
@@ -126,6 +132,7 @@ def get_optimizer(opt_config: dict, lr = 1e-3) -> Tuple[torch.optim.Optimizer, d
                   'ns_steps': opt_config.get('ns_steps', 5),
                   'lmo': lmo,
                   'l2_prod_norm': l2_prod_norm,
+                  'nuc_approx': nuc_approx,
                   'rms_layer_norm': rms_layer_norm,
                   }
 

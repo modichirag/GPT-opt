@@ -64,6 +64,7 @@ class Muon(torch.optim.Optimizer):
         l2_prod_norm: Whether to use the L2 norm for the product space over layers
         instead of the max norm, which scales each layer's LR by the nuclear norm of the
         gradient.
+        nuc_approx: How to approximate the gradient nuclear norm. Choices: [None, 'fro', 'past']
         rms_layer_norm: Whether to use the RMS norm the input/output space of each
         layer, which scale each layer's LR by sqrt(fan_out/fan_in).
         adamw_params: The parameters to be optimized by AdamW. Any parameters in `muon_params` which are
@@ -82,10 +83,11 @@ class Muon(torch.optim.Optimizer):
                  ns_steps=5,
                  lmo=True,
                  l2_prod_norm=False,
+                 nuc_approx=None,
                  rms_layer_norm=False,
                  adamw_betas=(0.95, 0.95),
                  adamw_eps=1e-8):
-            
+
         defaults = dict(
                 lr=lr,
                 wd=wd,
@@ -94,11 +96,12 @@ class Muon(torch.optim.Optimizer):
                 ns_steps=ns_steps,
                 lmo=lmo,
                 l2_prod_norm=l2_prod_norm,
+                nuc_approx=nuc_approx,
                 rms_layer_norm=rms_layer_norm,
                 adamw_betas=adamw_betas,
                 adamw_eps=adamw_eps,
         )
-        
+
         muon_params, muon_params_names = [], []
         adamw_params, adamw_params_names = [], []
         for name, p in named_params:
@@ -114,7 +117,7 @@ class Muon(torch.optim.Optimizer):
         params = list(muon_params)
         params.extend(adamw_params)
         super().__init__(params, defaults)
-        
+
         # Sort parameters into those for which we will use Muon, and those for which we will not
         # Use Muon for every parameter in muon_params which is >= 2D and doesn't look like an embedding or head layer
         for p in muon_params:
@@ -148,6 +151,7 @@ class Muon(torch.optim.Optimizer):
             momentum = group["momentum"]
             lmo = group["lmo"]
             l2_prod_norm = group["l2_prod_norm"]
+            nuc_approx = group["nuc_approx"]
             rms_layer_norm = group["rms_layer_norm"]
 
             # initial pass over parameters to compute update direction and LR scalings.
@@ -176,20 +180,29 @@ class Muon(torch.optim.Optimizer):
                 if lmo and not l2_prod_norm:
                     continue
 
-                # calc update.
-                if group["nesterov"]:
-                    g = g.add(buf, alpha=momentum)
-                else:
-                    g = buf
-                u = zeropower_via_newtonschulz5(g, steps=group["ns_steps"])
-
-                # compute nuclear norms for each layer. Gotta do some case analysis
-                # here depending on combination of options for l2 vs. max product norm
-                # and lmo vs. variational veiewpoint.
-                # should we cast g to 16-bit here or can we just do it once earlier?
+                # Compute (or approximate) nuclear norms of each layer's gradient.
                 if layer_nuc_norms is None:
                     layer_nuc_norms = torch.zeros(len(params), device=p.device)
-                layer_nuc_norms[i] = torch.trace(g.bfloat16().T @ u)
+                if nuc_approx is None or (nuc_approx == "past" and "past_nuc" not in state):
+
+                    # calc update.
+                    if group["nesterov"]:
+                        g = g.add(buf, alpha=momentum)
+                    else:
+                        g = buf
+                    u = zeropower_via_newtonschulz5(g, steps=group["ns_steps"])
+
+                    # If G = UDV^T, then nuc(G) = tr(G @ UV^T).
+                    layer_nuc_norms[i] = torch.trace(g.bfloat16().T @ u)
+
+                elif nuc_approx == "fro":
+                    layer_nuc_norms[i] = torch.linalg.matrix_norm(g, ord="fro")
+                elif nuc_approx == "past":
+                    layer_nuc_norms[i] = state["past_nuc"]
+                else:
+                    raise NotImplementedError
+
+                # Apply RMS scaling to nuclear norms.
                 if rms_layer_norm:
                     fan_out, fan_in = p.shape[:2]
                     layer_nuc_norms[i] *= math.sqrt(fan_out / fan_in)
@@ -215,12 +228,19 @@ class Muon(torch.optim.Optimizer):
                 # term before, but we are re-computing the matrix sign. This is
                 # suboptimal w.r.t.  time but doesn't use any extra memory. We can
                 # always tweak this later.
-                buf = self.state[p]["momentum_buffer"]
+                state = self.state[p]
+                buf = state["momentum_buffer"]
                 if group["nesterov"]:
                     g = g.add(buf, alpha=momentum)
                 else:
                     g = buf
                 u = zeropower_via_newtonschulz5(g, steps=group["ns_steps"])
+
+                # Compute and store nuclear norm of u if necessary.
+                if nuc_approx == "past":
+                    if "past_nuc" not in state:
+                        state["past_nuc"] = torch.zeros(1, device=p.device)
+                    state["past_nuc"] = torch.trace(g.bfloat16().T @ u)
 
                 # apply scaling factors to lr depending on steepest descent variations
                 lr_scale = 1.0

@@ -26,6 +26,18 @@ optimizer_params:
     lr_schedule: constant-linear
     warm_up_fraction: 0.4
 
+  - name: muon-nonlmo-nuc_fro
+    lr: [0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03]
+    weight_decay: 0.1
+    lr_schedule: constant-linear
+    warm_up_fraction: 0.4
+
+  - name: muon-nonlmo-nuc_past
+    lr: [0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03]
+    weight_decay: 0.1
+    lr_schedule: constant-linear
+    warm_up_fraction: 0.4
+
   - name: muon-l2_prod
     lr: [0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03]
     weight_decay: 0.1
