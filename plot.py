@@ -129,6 +129,7 @@ def main(config_file=None):
                 'teacher': 'k',
                 'muon': '#8A2BE2',  # Added a new color for "muon" (blue-violet)
                 'muon-nonlmo': '#FFFF00',
+                'muon-nonlmo-fro_approx': '#000000',
                 'muon-nonlmo-nuc_fro': '#000000',
                 'muon-nonlmo-nuc_past': '#808080',
                 'muon-l2_prod': '#008000',
@@ -148,6 +149,7 @@ def main(config_file=None):
                     'adam-sch': '--',
                     'muon': None,
                     'muon-nonlmo': None,
+                    'muon-nonlmo-fro_approx': None,
                     'muon-nonlmo-nuc_fro': None,
                     'muon-nonlmo-nuc_past': None,
                     'muon-l2_prod': None,
