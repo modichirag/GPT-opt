@@ -108,10 +108,12 @@ def smoothen_curve_batch(data, num_points):
             t=0.0
     return smooth_data
 
-def smoothen_curve_exp(data, num_points, beta=0.05):
+def smoothen_curve_exp(data, num_points=None, beta=0.05):
     smooth_data =[data[0]]
     data_av = data[0]
     total_iterations = len(data)
+    if num_points is None:
+        num_points = total_iterations
     av_interval = max(1, total_iterations // num_points)
     for count, item in enumerate(data, start=0): 
         if np.isnan(item):
@@ -121,15 +123,13 @@ def smoothen_curve_exp(data, num_points, beta=0.05):
             smooth_data.append(data_av)
     return smooth_data
 
-def smoothen_dict(dict, num_points, beta= 0.05):
+def smoothen_dict(dict, num_points=None, beta= 0.05):
     for key in dict.keys():
         if key == 'losses':
-            dict[key] = smoothen_curve_exp(dict[key], num_points, beta = beta)
+            dict[key] = smoothen_curve_exp(dict[key], num_points=None, beta = beta)
         elif key == 'step_times':
-            # If smoothing losses, should also update step times so that indices line up
-            # when plotting against wallclock time. Not implementing this now because I
-            # turned off smoothing anyway.
-            raise NotImplementedError
+            if num_points is not None:
+                raise NotImplementedError("Plotting by wallclock time is not compatible with changing the number of plotted points through smoothing.")
 
         """
         Michael: Temporarily removing smoothing of step_size_list. smoothen_curve_exp is
