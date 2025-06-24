@@ -48,13 +48,21 @@ def plot_final_loss_vs_lr(outputs, colormap, outfilename, val=False):
         methods[name]['losses'].append(final_loss)
 
     # Plot each method as a line
+    lower_bound = 3.2
+    upper_bound = 0.0
     for name, data in methods.items():
         sorted_indices = sorted(range(len(data['lrs'])), key=lambda i: data['lrs'][i])  # Sort by learning rate
         sorted_lrs = [data['lrs'][i] for i in sorted_indices]
         sorted_losses = [data['losses'][i] for i in sorted_indices]
         ax.plot(sorted_lrs, sorted_losses, label=name, color=colormap[name], linewidth=2)
+        current_ub = np.max(sorted_losses)
+        if current_ub > upper_bound:
+            upper_bound = current_ub
+    upper_bound *= 1.1
+    upper_bound = min(upper_bound, 10.0)
 
     ax.set_xscale('log')
+    ax.set_ylim([lower_bound, upper_bound])
     ax.set_xlabel('Learning Rate')
     if val:
         ax.set_ylabel('Final Validation Loss')
@@ -92,6 +100,7 @@ def plot_tuned_curves(outputs, colormap, linestylemap, outfilename, num_epochs, 
     lr_ranges = {name: [tuned_methods[name]['best_lr']] * 2 for name in tuned_methods}
     plot_data(ax, tuned_outputs, num_epochs, field, 'Loss', colormap, linestylemap, lr_ranges, get_alpha_from_lr, wallclock=wallclock)
     upper_bound = np.max([output[field][round(0.2 * len(output[field]))] for output in tuned_outputs])
+    upper_bound = min(upper_bound, 10.0) if not np.isnan(upper_bound) else 10.0
     ax.legend(loc='upper right', fontsize=10)
     ax.set_ylim(3.2, upper_bound)
     fig.subplots_adjust(top=0.99, bottom=0.155, left=0.12, right=0.99)
@@ -135,6 +144,8 @@ def main(config_file=None):
                 'muon-nonlmo-rms': '#BE6400',
                 'muon-l2_prod-rms': '#FF00FF',
                 'muon-nonlmo-l2_prod-rms': '#FFD700',
+                'sign-gd': '#61ACE5',
+                'sign-gd-nonlmo': '#00518F',
     }
     linestylemap = {'momo': None,
                     'sgd-m': None,
@@ -155,6 +166,8 @@ def main(config_file=None):
                     'muon-nonlmo-rms': None,
                     'muon-l2_prod-rms': None,
                     'muon-nonlmo-l2_prod-rms': None,
+                    'sign-gd': None,
+                    'sign-gd-nonlmo': None,
     }
 
     # Collect learning rate ranges for each method
@@ -215,8 +228,8 @@ def main(config_file=None):
     # Plot loss curves of tuned algorithms.
     plot_tuned_curves(outputs, colormap, linestylemap, outfilename, config['training_params']['num_epochs'], wallclock=False, val=False)
     plot_tuned_curves(outputs, colormap, linestylemap, outfilename, config['training_params']['num_epochs'], wallclock=False, val=True)
-    plot_tuned_curves(outputs, colormap, linestylemap, outfilename, config['training_params']['num_epochs'], wallclock=True, val=False)
-    plot_tuned_curves(outputs, colormap, linestylemap, outfilename, config['training_params']['num_epochs'], wallclock=True, val=True)
+    #plot_tuned_curves(outputs, colormap, linestylemap, outfilename, config['training_params']['num_epochs'], wallclock=True, val=False)
+    #plot_tuned_curves(outputs, colormap, linestylemap, outfilename, config['training_params']['num_epochs'], wallclock=True, val=True)
 
 
 if __name__ == "__main__":

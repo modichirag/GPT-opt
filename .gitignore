@@ -1,0 +1,12 @@
+*.swp
+figures/
+gptopt.egg-info/
+gptopt/__pycache__/
+gptopt/bin/
+gptopt/lib/
+gptopt/lib64
+gptopt/optim/__pycache__/
+gptopt/outputs/
+gptopt/pyvenv.cfg
+gptopt/share/
+output/

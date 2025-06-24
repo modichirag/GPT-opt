@@ -1,0 +1,68 @@
+# config.yaml
+optimizer_params:
+  - name: adamw
+    lr: [0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03]
+    weight_decay: 0.1
+    lr_schedule: constant-linear
+    warm_up_fraction: 0.4
+
+  - name: muon
+    lr: [0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03]
+    weight_decay: 0.1
+    lr_schedule: constant-linear
+    warm_up_fraction: 0.4
+
+  - name: muon-nonlmo
+    lr: [0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03]
+    weight_decay: 0.1
+    lr_schedule: constant-linear
+    warm_up_fraction: 0.4
+
+  - name: muon-nonlmo-nuc_past
+    lr: [0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03]
+    weight_decay: 0.1
+    lr_schedule: constant-linear
+    warm_up_fraction: 0.4
+
+  - name: muon-l2_prod
+    lr: [0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03]
+    weight_decay: 0.1
+    lr_schedule: constant-linear
+    warm_up_fraction: 0.4
+
+  - name: muon-nonlmo-l2_prod
+    lr: [0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03]
+    weight_decay: 0.1
+    lr_schedule: constant-linear
+    warm_up_fraction: 0.4
+
+training_params:
+  tokens_processed: 524288 # 2^19
+  val_tokens_processed: 8388608 #2^23
+  batch_size: 16
+  num_epochs: 1
+  context_length: 1024
+  gradnorm: 1.0
+  tensorcore_precision: high   #Can be highest, high, or medium
+  autocast: True
+  mixed_precision: bfloat16
+  compile: True
+
+logging_params:
+  val_tokens_processed: 8388608 #2^23
+  log_step: 256
+  val_step: 256
+  save_ckpt_step: 512
+  load_ckpt_step: 0
+  keep_last: 2
+  ckpt_dir: "" #/mnt/ceph/users/cmodi/gptopt/
+
+gpt_model:
+  n_embd: 1280
+  n_layer: 36
+  n_head: 20
+  vocab_size: 50257
+  flash_attention: True
+
+dataset:
+  name: "fineweb1B"
