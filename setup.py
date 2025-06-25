@@ -5,6 +5,8 @@ setup(
     version='0.1',
     packages=find_packages(),
     install_requires=[
+        'setuptools-rust',
+        'cython',
         'torch',
         'pandas',
         'matplotlib',
@@ -12,6 +14,8 @@ setup(
         'requests',
         'transformers',
         'datasets',
-        'accelerate'
+        'accelerate',
+        'tiktoken',
+        'zstandard'
     ],
 )

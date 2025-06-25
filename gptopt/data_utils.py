@@ -55,7 +55,7 @@ def process_and_save_docs(dataset, filepath, encoding, shard_size=int(1e8), npro
     print("Number of processes used  : ", nprocs)
     
     # pool.imap expects function with single input
-    tokenizer = partial(tokenize, enc=encoding)    
+    tokenizer = partial(tokenize, enc=encoding)
 
     with mp.Pool(nprocs) as pool:
         shard_index = 0
