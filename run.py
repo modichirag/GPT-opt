@@ -85,16 +85,23 @@ for opt_config in list_optimizer_params:
         
         # copy model to ensure consistency
         model_copy = copy.deepcopy(model).to(device)
+        
+        # Setup optimizer
+        optimizer_obj, hyperp = get_optimizer(opt_config, lr=lr)
+
         if training_params['compile']:
             if master_process: print("Compiling model")
             model_copy = torch.compile(model_copy)
+
         if ddp:
             model_copy = DDP(model_copy, device_ids=[local_rank])
-
-        # Setup optimizer
-        optimizer_obj, hyperp = get_optimizer(opt_config, lr=lr)
-        p = model_copy.named_parameters() if 'muon' in opt_config['name'] else model_copy.parameters()
-        optimizer = optimizer_obj(p, **hyperp)
+        
+        opt_name = opt_config['name']
+        p = model_copy.named_parameters() if ('muon' in opt_name or opt_name == 'dap') else model_copy.parameters()
+        if opt_name == 'dap':
+            optimizer = optimizer_obj(model_copy, p, **hyperp)
+        else:
+            optimizer = optimizer_obj(p, **hyperp)
         scheduler = get_scheduler(opt_config, optimizer, total_iterations=total_iterations)
         
         # Train

@@ -6,6 +6,7 @@ from transformers import get_cosine_schedule_with_warmup
 from .momo import Momo
 from .momo_adam import MomoAdam
 from .muon import Muon
+from .dap import DAP
 from .sign_gd import SignGD
 # from .sps import SPS
 # from .adabound import AdaBoundW
@@ -112,6 +113,18 @@ def get_optimizer(opt_config: dict, lr = 1e-3) -> Tuple[torch.optim.Optimizer, d
                   'lb': opt_config.get('lb', 0.),
                   'divide': opt_config.get('divide', True),
                   'use_fstar': True
+                  }
+        
+    elif name == 'dap':
+        opt_obj = DAP
+        hyperp = {'lr': lr,
+                  'wd': opt_config.get('wd', 0.1),
+                  'momentum': opt_config.get('momentum', 0.95),
+                  'nesterov': opt_config.get('nesterov', False),
+                  'damping': opt_config.get('damping', 0),
+                  'adamw_betas': opt_config.get('betas', (0.95, 0.95)),
+                  'adamw_eps': opt_config.get('eps', 1e-8),
+                  'ema_beta': opt_config.get('ema_beta', 0.999),
                   }
 
     elif 'muon' in name:
