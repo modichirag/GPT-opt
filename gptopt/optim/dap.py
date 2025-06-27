@@ -12,10 +12,11 @@ class DAP(Optimizer):
         wd=0.1,
         momentum=0.95,
         nesterov=True,
-        damping=0,
-        ema_beta=0.99,
+        damping=0.0,
+        ema_beta=0.0,
         adamw_betas=(0.95, 0.95),
         adamw_eps=1e-8,
+        sgd_update: bool = False,
     ):
         defaults = dict(
             lr=lr,
@@ -55,8 +56,12 @@ class DAP(Optimizer):
         params.extend(adamw_params)
         super().__init__(params, defaults)
         self.ema_beta = ema_beta
-            
-        self._register_input_hooks(model, dap_params)
+        # Whether to bypass the expensive preconditioner and use a plain SGD update.
+        self.sgd_update = sgd_update
+
+        # Register hooks only if we actually intend to use the covariance statistics.
+        if not self.sgd_update:
+            self._register_input_hooks(model, dap_params)
 
     def _register_input_hooks(self, model: nn.Module, dap_params):
         """Attach hooks **only** to modules whose weights are in dap_params."""
@@ -149,19 +154,25 @@ class DAP(Optimizer):
                 else:
                     g = buf
                 
-                C32 = self.state[p]["C_ema"].float()
+                if self.sgd_update:
+                    # Plain (momentum) SGD: use gradient directly.
+                    u = g
+                else:
+                    C32 = self.state[p]["C_ema"].float()
 
-                if damping:
-                    C32.diagonal().add_(damping)
+                    if damping:
+                        C32.diagonal().add_(damping)
 
-                g32 = g.float()
-                u32 = g32 @ torch.linalg.pinv(C32)
+                    g32 = g.float()
+                    # Precondition the gradient using the inverse covariance.
+                    u32 = g32 @ torch.linalg.pinv(C32)
+                    u = u32.to(p.dtype)
 
                 # apply weight decay
                 p.data.mul_(1 - lr * wd)
 
                 # apply update
-                p.data.add_(u32.to(p.dtype), alpha=-lr)
+                p.data.add_(u, alpha=-lr)
 
             ############################
             #       AdamW backup       #
