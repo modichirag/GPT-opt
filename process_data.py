@@ -28,7 +28,7 @@ data_settings = {
         "load_kwargs": {"split": "train", "streaming": True},
     }
 }
-DATA_DIR = "/mnt/ceph/users/mcrawshaw/huggingface/"
+DATA_DIR = "/mnt/ceph/users/nghosh/huggingface"
 
 
 # parse command line arguments

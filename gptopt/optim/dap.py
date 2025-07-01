@@ -17,6 +17,7 @@ class DAP(Optimizer):
         adamw_betas=(0.95, 0.95),
         adamw_eps=1e-8,
         sgd_update: bool = False,
+        scalar: bool = False,
     ):
         defaults = dict(
             lr=lr,
@@ -58,6 +59,9 @@ class DAP(Optimizer):
         self.ema_beta = ema_beta
         # Whether to bypass the expensive preconditioner and use a plain SGD update.
         self.sgd_update = sgd_update
+        self.scalar = scalar
+
+        assert not (self.scalar and self.sgd_update), "choose either scalar or sgd update"
 
         # Register hooks only if we actually intend to use the covariance statistics.
         if not self.sgd_update:
@@ -164,8 +168,13 @@ class DAP(Optimizer):
                         C32.diagonal().add_(damping)
 
                     g32 = g.float()
+
                     # Precondition the gradient using the inverse covariance.
-                    u32 = g32 @ torch.linalg.pinv(C32)
+                    if self.scalar:
+                        u32 = g32 / torch.linalg.norm(C32, ord=2)
+                    else:
+                        u32 = g32 @ torch.linalg.pinv(C32)
+                        
                     u = u32.to(p.dtype)
 
                 # apply weight decay

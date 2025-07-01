@@ -29,7 +29,7 @@ def load_outputs(output_dir):
 
 def plot_final_loss_vs_lr(outputs, colormap, outfilename, val=False):
     """Plot final loss versus learning rate as lines for each method."""
-    fig, ax = plt.subplots(figsize=(6, 4))
+    fig, ax = plt.subplots(figsize=(8, 4))  # Increased width to accommodate side legend
     methods = {}
 
     # Group final losses and learning rates by method
@@ -70,9 +70,9 @@ def plot_final_loss_vs_lr(outputs, colormap, outfilename, val=False):
     else:
         ax.set_ylabel('Final Loss')
         plotfile = 'figures/' + outfilename + '-lr-sens' + '.pdf'
-    ax.legend(loc='upper right', fontsize=10)
+    ax.legend(loc='center left', bbox_to_anchor=(1.02, 0.5), fontsize=10)
     ax.grid(axis='both', lw=0.2, ls='--', zorder=0)
-    fig.subplots_adjust(top=0.95, bottom=0.15, left=0.15, right=0.95)
+    fig.subplots_adjust(top=0.95, bottom=0.15, left=0.12, right=0.75)  # Adjusted right margin for legend
     fig.savefig(plotfile, format='pdf', bbox_inches='tight')
 
 

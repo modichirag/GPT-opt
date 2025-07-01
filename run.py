@@ -97,8 +97,8 @@ for opt_config in list_optimizer_params:
             model_copy = DDP(model_copy, device_ids=[local_rank])
         
         opt_name = opt_config['name']
-        p = model_copy.named_parameters() if ('muon' in opt_name or opt_name == 'dap') else model_copy.parameters()
-        if opt_name == 'dap':
+        p = model_copy.named_parameters() if ('muon' in opt_name or 'dap' in opt_name) else model_copy.parameters()
+        if 'dap' in opt_name:
             optimizer = optimizer_obj(model_copy, p, **hyperp)
         else:
             optimizer = optimizer_obj(p, **hyperp)
