@@ -119,6 +119,9 @@ def get_optimizer(opt_config: dict, lr = 1e-3) -> Tuple[torch.optim.Optimizer, d
         opt_obj = DAP
         sgd_update = 'sgd' in name
         scalar = 'scalar' in name
+        include_output = 'output' in name
+        include_embed = 'embed' in name
+        use_ns_pinv = 'ns' in name
         hyperp = {'lr': lr,
                   'wd': opt_config.get('wd', 0.1),
                   'momentum': opt_config.get('momentum', 0.95),
@@ -127,8 +130,12 @@ def get_optimizer(opt_config: dict, lr = 1e-3) -> Tuple[torch.optim.Optimizer, d
                   'adamw_betas': opt_config.get('betas', (0.95, 0.95)),
                   'adamw_eps': opt_config.get('eps', 1e-8),
                   'ema_beta': opt_config.get('ema_beta', 0.0),
+                  'ns_pinv_steps': opt_config.get('ns_pinv_steps', 20),
+                  'use_ns_pinv': use_ns_pinv,
                   'scalar': scalar,
                   'sgd_update': sgd_update,
+                  'include_output': include_output,
+                  'include_embed': include_embed,
                   }
 
     elif 'muon' in name:

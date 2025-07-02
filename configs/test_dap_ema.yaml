@@ -1,28 +1,10 @@
 # config.yaml
 optimizer_params:
-  - name: dap-sgd
+  - name: dap-mom-ema
     lr: [0.00003, 0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03]
     lr_schedule: constant
-    ema_beta: 0
-    momentum: 0
-    wd: 0
-    sgd_update: True
-    scalar: False
-
-  - name: dap-scalar
-    lr: [0.00003, 0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03]
-    lr_schedule: constant
-    ema_beta: 0
-    momentum: 0
-    wd: 0
-    sgd_update: False
-    scalar: True
-
-  - name: dap
-    lr: [0.00003, 0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03]
-    lr_schedule: constant
-    ema_beta: 0
-    momentum: 0
+    ema_beta: 0.95
+    momentum: 0.95
     wd: 0
     sgd_update: False
     scalar: False

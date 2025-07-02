@@ -2,7 +2,6 @@
 optimizer_params:
   - name: dap-scalar-mom
     lr: [0.00003, 0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03]
-    weight_decay: 0
     lr_schedule: constant
     ema_beta: 0
     momentum: 0.95
@@ -12,7 +11,6 @@ optimizer_params:
 
   - name: dap-sgd-mom
     lr: [0.00003, 0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03]
-    weight_decay: 0
     lr_schedule: constant
     ema_beta: 0
     momentum: 0.95
@@ -22,9 +20,17 @@ optimizer_params:
 
   - name: dap-mom
     lr: [0.00003, 0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03]
-    weight_decay: 0
     lr_schedule: constant
     ema_beta: 0
+    momentum: 0.95
+    wd: 0
+    sgd_update: False
+    scalar: False
+    
+  - name: dap-mom-ema
+    lr: [0.00003, 0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03]
+    lr_schedule: constant
+    ema_beta: 0.95
     momentum: 0.95
     wd: 0
     sgd_update: False

@@ -15,10 +15,10 @@ sbatch <<EOF
 module load python
 
 # Activate environment
-source gptopt/bin/activate
+source venv/bin/activate
 
 # Install the necessary packages
-python3 -m pip install -e .
+# python3 -m pip install -e .
 
 # Run the Python script with the config file
 python3 run.py --config $1

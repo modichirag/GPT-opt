@@ -1,0 +1,53 @@
+# config.yaml
+optimizer_params:
+  - name: dap-sgd-output-embed
+    lr: [0.00003, 0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03, 0.1, 0.3]
+    wd: 0
+    lr_schedule: constant
+    sgd_update: True
+    include_output: True
+    include_embed: True
+
+  - name: sgd
+    lr: [0.00003, 0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03, 0.1, 0.3, 1.0, 3.0]
+    weight_decay: 0
+    lr_schedule: constant
+
+  - name: sgd-nesterov
+    lr: [0.00003, 0.0001, 0.0003, 0.001, 0.003, 0.01, 0.03, 0.1, 0.3, 1.0, 3.0]
+    weight_decay: 0
+    lr_schedule: constant
+    momentum: 0.95
+    nesterov: True
+    dampening: 0
+
+training_params:
+  tokens_processed: 2048  # 2^11  # 524288 # 2^19
+  val_tokens_processed: 8388608  # 2^23
+  batch_size: 2
+  num_epochs: 1
+  context_length: 512
+  gradnorm: 1.0
+  tensorcore_precision: high  # Can be highest, high, or medium
+  autocast: True
+  mixed_precision: bfloat16
+  compile: False
+
+logging_params:
+  val_tokens_processed: 2048  # 2^23
+  log_step: 50
+  val_step: 50
+  save_ckpt_step: 500
+  load_ckpt_step: 0
+  keep_last: 2
+  ckpt_dir: ""  # /mnt/ceph/users/cmodi/gptopt/
+
+gpt_model:
+  n_embd: 768
+  n_layer: 12
+  n_head: 12
+  vocab_size: 50257
+  flash_attention: True
+
+dataset:
+  name: "tiny_shakespeare"

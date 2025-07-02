@@ -98,10 +98,12 @@ for opt_config in list_optimizer_params:
         
         opt_name = opt_config['name']
         p = model_copy.named_parameters() if ('muon' in opt_name or 'dap' in opt_name) else model_copy.parameters()
+
         if 'dap' in opt_name:
             optimizer = optimizer_obj(model_copy, p, **hyperp)
         else:
             optimizer = optimizer_obj(p, **hyperp)
+
         scheduler = get_scheduler(opt_config, optimizer, total_iterations=total_iterations)
         
         # Train

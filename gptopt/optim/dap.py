@@ -1,7 +1,7 @@
 import torch
 from torch import nn
 from torch.optim import Optimizer
-
+from gptopt.linalg_utils import ns_pinv
 
 class DAP(Optimizer):
     def __init__(
@@ -18,6 +18,10 @@ class DAP(Optimizer):
         adamw_eps=1e-8,
         sgd_update: bool = False,
         scalar: bool = False,
+        include_output: bool = False,
+        include_embed: bool = False,
+        use_ns_pinv: bool = False,
+        ns_pinv_steps: int = 30,
     ):
         defaults = dict(
             lr=lr,
@@ -33,25 +37,37 @@ class DAP(Optimizer):
         adamw_params, adamw_params_names = [], []
 
         self.dap_params   = dap_params
+        self.dap_params_names = dap_params_names
+
         self.adamw_params = adamw_params
+        self.adamw_params_names = adamw_params_names
+
+        excluded_names = []
+        if not include_output:
+            excluded_names.extend(["lm_head", "weight_proj"])
+            
+        if not include_embed:
+            excluded_names.extend(["embeddings", "embed_tokens", "wte", "wpe"])
 
         for name, p in named_params:
             if p.ndim >= 2 and not any(
-                excluded in name
-                for excluded in [
-                    "embeddings",
-                    "embed_tokens",
-                    "wte",
-                    "lm_head",
-                    "wpe",
-                    "weight_proj",
-                ]
+                excluded in name for excluded in excluded_names
             ):
                 dap_params.append(p)
                 dap_params_names.append(name)
             else:
                 adamw_params.append(p)
                 adamw_params_names.append(name)
+
+        # Print informative summary of parameter classification
+        print(f"\n=== DAP Optimizer Parameter Classification ===")
+        print(f"DAP Parameters ({len(dap_params)}):")
+        for name in dap_params_names:
+            print(f"  - {name}")
+        print(f"\nAdamW Parameters ({len(adamw_params)}):")
+        for name in adamw_params_names:
+            print(f"  - {name}")
+        print(f"==============================================\n")
 
         params = list(dap_params)
         params.extend(adamw_params)
@@ -60,7 +76,11 @@ class DAP(Optimizer):
         # Whether to bypass the expensive preconditioner and use a plain SGD update.
         self.sgd_update = sgd_update
         self.scalar = scalar
-
+        self.include_output = include_output
+        self.include_embed = include_embed
+        self.use_ns_pinv = use_ns_pinv
+        self.ns_pinv_steps = ns_pinv_steps
+        
         assert not (self.scalar and self.sgd_update), "choose either scalar or sgd update"
 
         # Register hooks only if we actually intend to use the covariance statistics.
@@ -162,18 +182,21 @@ class DAP(Optimizer):
                     # Plain (momentum) SGD: use gradient directly.
                     u = g
                 else:
-                    C32 = self.state[p]["C_ema"].float()
-
-                    if damping:
-                        C32.diagonal().add_(damping)
-
+                    C = self.state[p]["C_ema"]
+                    C32 = C.float()
                     g32 = g.float()
 
-                    # Precondition the gradient using the inverse covariance.
-                    if self.scalar:
-                        u32 = g32 / torch.linalg.norm(C32, ord=2)
+                    if self.use_ns_pinv:
+                        u32 = g32 @ ns_pinv(C32, steps=self.ns_pinv_steps)
                     else:
-                        u32 = g32 @ torch.linalg.pinv(C32)
+                        if damping:
+                            C32.diagonal().add_(damping)
+
+                        if self.scalar:
+                            u32 = g32 / torch.linalg.norm(C32, ord=2)
+                        else:
+                            # Precondition the gradient using the inverse covariance.
+                            u32 = g32 @ torch.linalg.pinv(C32)
                         
                     u = u32.to(p.dtype)
 
