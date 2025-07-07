@@ -181,21 +181,18 @@ class Muon(torch.optim.Optimizer):
                                                 fast_apply_restart = polar_params.get("fast_apply_restart", 1),
                                                 pinpoint_top=polar_params.get("pinpoint_top", True)
             )
-        elif polar_method == "PolarExpress":
-            return lambda G, steps : PolarExpress(G , steps,
-                                                frob_eps=polar_params.get("frob_eps", 0.01), 
-                                                deflation_eps=polar_params.get("deflation_eps", 0.01),
-                                                centered=polar_params.get("centered", True)
-            )
-        elif polar_method == "Pole":
-            return PolynomialPolarFactorizer(
-                normalizer= FrobeniusNormalizer(**polar_params.get("normalizer_params", {})),
-                # normalizer=SmartNormalizer(**polar_params.get("normalizer_params", {})),
-                polynomial_sign_iteration=Pole(**polar_params.get("polynomial_params", {})),
-                use_fast_apply=polar_params.get("use_fast_apply", True),
-                deflation_eps=polar_params.get("deflation_eps", 0),
-                cast=polar_params.get("cast", None)
-            )
+        elif polar_method == "polarexpress":
+            return PolarExpress 
+
+        # elif polar_method == "Pole":
+        #     return PolynomialPolarFactorizer(
+        #         normalizer= FrobeniusNormalizer(**polar_params.get("normalizer_params", {})),
+        #         # normalizer=SmartNormalizer(**polar_params.get("normalizer_params", {})),
+        #         polynomial_sign_iteration=Pole(**polar_params.get("polynomial_params", {})),
+        #         use_fast_apply=polar_params.get("use_fast_apply", True),
+        #         deflation_eps=polar_params.get("deflation_eps", 0),
+        #         cast=polar_params.get("cast", None)
+        #     )
         else:
             raise ValueError(f"Unknown polar method: {polar_method}")
 

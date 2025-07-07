@@ -52,7 +52,7 @@ def plot_final_loss_vs_lr(outputs, colormap, outfilename, linestylemap,  val=Fal
         sorted_lrs = [data['lrs'][i] for i in sorted_indices]
         sorted_losses = [data['losses'][i] for i in sorted_indices]
         ax.plot(sorted_lrs, sorted_losses, alpha= 0.85, label=name, color=colormap[name], linestyle=linestylemap[name], linewidth=2)
-
+    import pdb; pdb.set_trace()
     ax.set_xscale('log')
     ax.set_xlabel('Learning Rate')
     if val:
@@ -63,7 +63,7 @@ def plot_final_loss_vs_lr(outputs, colormap, outfilename, linestylemap,  val=Fal
         plotfile = 'figures/' + outfilename + '-lr-sens' + '.pdf'
     ax.legend(loc='upper right', fontsize=10)
     ax.grid(axis='both', lw=0.2, ls='--', zorder=0)
-    # ax.set_ylim(bottom=3.55, top=4.5)
+    # ax.set_ylim(bottom=3.0, top=4.5)
     # ax.set_xlim(0.0003, 0.05)
     fig.subplots_adjust(top=0.95, bottom=0.15, left=0.15, right=0.95)
     fig.savefig(plotfile, format='pdf', bbox_inches='tight')
@@ -103,6 +103,7 @@ def main(config_file=None):
                 'adam-sch': '#FF6B35',
                 'momo': '#61ACE5',
                 'muon-PolarExp': 'k',
+                'muon-polarexpress': 'k',
                 'muon-pe': 'k',  # #B3CBB9, darkish blue
                 'muon-You': '#8A2BE2',  # Added a new color for "muon" (blue-violet)
                 'muon*': '#228B22',
@@ -114,6 +115,7 @@ def main(config_file=None):
                     'sgd-sch': '--',
                     'muon-pe': '--',
                     'muon-PolarExp': None,
+                    'muon-polarexpress': None,
                     'adam': None,
                     'adamw': None,
                     'adam-sch': '--',
@@ -173,7 +175,7 @@ def main(config_file=None):
     selected_outputs = list(best_outputs.values())
     get_alpha_from_lr = lambda lr, lr_range: 0.85
     initial_loss = selected_outputs[0]['val_losses'][0] if selected_outputs and 'val_losses' in selected_outputs[0] else 1.0  # Default to 1.0 if not available
-    upper_bound = initial_loss*0.7  # Set upper bound to 20% above the initial loss
+    upper_bound = initial_loss*1.0  # Set upper bound to 70% above the initial loss
     fig, ax = plt.subplots(figsize=(4, 3))
     plot_data(ax, selected_outputs, config['training_params']['num_epochs'], 'val_losses', 'Validation Loss', colormap, linestylemap, best_lr, get_alpha_from_lr)
     lower_bound = min(min(output['val_losses']) for output in selected_outputs if 'val_losses' in output)
