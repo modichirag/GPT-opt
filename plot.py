@@ -52,7 +52,6 @@ def plot_final_loss_vs_lr(outputs, colormap, outfilename, linestylemap,  val=Fal
         sorted_lrs = [data['lrs'][i] for i in sorted_indices]
         sorted_losses = [data['losses'][i] for i in sorted_indices]
         ax.plot(sorted_lrs, sorted_losses, alpha= 0.85, label=name, color=colormap[name], linestyle=linestylemap[name], linewidth=2)
-    import pdb; pdb.set_trace()
     ax.set_xscale('log')
     ax.set_xlabel('Learning Rate')
     if val:
