@@ -68,10 +68,10 @@ torch.set_float32_matmul_precision(training_params['tensorcore_precision'])
 dataset_path = DATA_DIR + f"/{config['dataset']['name']}-gpt2/"
 if master_process: print(f"Load data from {dataset_path}")
 B, T = training_params['batch_size'], training_params['context_length']
-if master_process:
-    print(f"Batch size: {B}, Context length: {T}")
-    print(f"Total tokens processed: {training_params['tokens_processed']}")
-    print(f"World size: {world_size}, Rank: {rank}, Local rank: {local_rank}")
+
+print(f"Batch size: {B}, Context length: {T}")
+print(f"Total tokens processed: {training_params['tokens_processed']}")
+print(f"World size: {world_size}, Rank: {rank}, Local rank: {local_rank}")
 
 assert training_params['tokens_processed'] % (world_size * B * T) == 0 
 train_dataloader = ShardedDataLoader(dataset_path, B, T, "train", device)
