@@ -7,6 +7,8 @@ from .momo import Momo
 from .momo_adam import MomoAdam
 from .muon import Muon
 from .sign_gd import SignGD
+from .iams_adam import IAMSAdam
+from .iams import IAMS
 # from .sps import SPS
 # from .adabound import AdaBoundW
 # from .adabelief import AdaBelief
@@ -29,7 +31,23 @@ def get_optimizer(opt_config: dict, lr = 1e-3) -> Tuple[torch.optim.Optimizer, d
         hyperp = {'lr': lr,
                   'weight_decay': opt_config.get('weight_decay', 0)
                   }
-        
+    elif name == 'iams':
+        opt_obj = IAMS
+        hyperp = {'lr': lr,
+                  'lmbda': opt_config.get('lmbda', 9.0),
+                  'weight_decay': opt_config.get('weight_decay', 0),
+                  'lb': opt_config.get('lb', 0.0)
+                  }
+    elif name == 'iams-adam':
+        opt_obj = IAMSAdam
+        hyperp = {'lr': lr,
+                  'lmbda': opt_config.get('lmbda', 9.0),
+                  'beta2': opt_config.get('betas', (0.9, 0.999))[1],
+                  'eps': opt_config.get('eps', 1e-8),
+                  'weight_decay': opt_config.get('weight_decay', 0),
+                  'lb': opt_config.get('lb', 0.0)
+                  }
+
     elif name == 'sgd-m':
         opt_obj = torch.optim.SGD
         # sgd-m with exp. weighted average should have dampening = momentum

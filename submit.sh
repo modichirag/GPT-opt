@@ -12,13 +12,14 @@ sbatch <<EOF
 #SBATCH --constraint=a100
 #SBATCH -o output/slurm_logs/${CONFIG_NAME}.log
 
-module load python
+export OMP_NUM_THREADS=1
+# module load modules/2.4-alpha2
 
 # Activate environment
-source gptopt/bin/activate
+source gptopt-env/bin/activate
 
 # Install the necessary packages
-python3 -m pip install -e .
+python -m pip install -e .
 
 # Run the Python script with the config file
 python3 run.py --config $1

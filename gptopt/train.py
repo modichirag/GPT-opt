@@ -7,7 +7,7 @@ import contextlib
 typedict = {"float16":torch.float16, "float32":torch.float32, "bfloat16":torch.bfloat16}
 
 
-def train(train_dataloader, val_dataloader, model, optimizer, training_params, device="cuda", scheduler=None):
+def train(train_dataloader, val_dataloader, model, optimizer, training_params, device="cuda", scheduler=None, teacher_model=None):
     losses = []
     val_losses = []
     learning_rates = []
@@ -27,6 +27,9 @@ def train(train_dataloader, val_dataloader, model, optimizer, training_params, d
     if training_params['autocast']:
         ctxt = torch.autocast(device_type=device, dtype=typedict[training_params['mixed_precision']]) 
 
+    if 'schedule' in optimizer_name.lower():
+        optimizer.train()
+
     # Training loop
     for epoch in range(training_params['num_epochs']):
         print(f"Epoch {epoch+1} of {training_params['num_epochs']}")
@@ -37,7 +40,14 @@ def train(train_dataloader, val_dataloader, model, optimizer, training_params, d
         start_time = time.time()
         optimizer.zero_grad()
         for step, batch in enumerate(train_dataloader):
-
+            
+            # Compute teacher loss if teacher model is provided
+            with torch.no_grad():
+                if teacher_model is not None:
+                    with ctxt:
+                        teacher_loss = teacher_model(batch[0], labels=batch[0]).loss
+                        teacher_loss /= grad_accum_steps
+                    teacher_loss_accum += loss.detach()
             # Compute training loss
             with ctxt:
                 loss = model(batch[0], labels=batch[0]).loss
@@ -51,6 +61,8 @@ def train(train_dataloader, val_dataloader, model, optimizer, training_params, d
                     norm = torch.nn.utils.clip_grad_norm_(model.parameters(), training_params['gradnorm'])
                 if pass_loss:
                     optimizer.step(closure=None, loss=loss)
+                elif teacher_model is not None:
+                    optimizer.step(closure=None, loss=loss, teacher_loss=teacher_loss)
                 else:
                     optimizer.step()
                 optimizer.zero_grad()
@@ -74,6 +86,8 @@ def train(train_dataloader, val_dataloader, model, optimizer, training_params, d
 
         # Evaluate on validation set
         model.eval()
+        if 'schedule' in optimizer_name.lower():
+            optimizer.eval()
         val_loss, counter = 0., 0
         with torch.no_grad():
             for _, batch in enumerate(val_dataloader):
