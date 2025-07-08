@@ -8,8 +8,7 @@ import torch.distributed as dist
 from .utils import get_worker_info
 
 magic_number = 20250401         # used in the header of saved binary files
-DATA_DIR = "/mnt/ceph/users/mcrawshaw/huggingface/"
-
+DATA_DIR = "/mnt/ceph/users/cmodi/huggingface/"
 
 def load_data_shard(filename, device):
     header = torch.from_file(filename, False, 256, dtype=torch.int32) # header is 256 int32

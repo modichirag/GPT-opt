@@ -48,17 +48,19 @@ if master_process:
 
 # Load model
 model = load_model(config['gpt_model'], device)
-    
 # If there is a teacher model, load it
 if 'teacher_model' in config:
-    from transformers import AutoModel, AutoTokenizer
-    teacher_model = AutoModel.from_pretrained(config["teacher_model"])
-    tokenizer = AutoTokenizer.from_pretrained(config["teacher_model"])
+    from transformers import AutoModelForCausalLM, AutoTokenizer
+    teacher_model = AutoModelForCausalLM.from_pretrained(config["teacher_model"]).to(device)
     if master_process:
         print(f"Loaded teacher model {config['teacher_model']}")    
     # Freeze teacher model's parameters for distillation
     for param in teacher_model.parameters():
         param.requires_grad = False
+else:
+    teacher_model = None
+
+
 # Set the training parameters
 training_params = config['training_params'] 
 list_optimizer_params = config["optimizer_params"]
@@ -115,7 +117,7 @@ for opt_config in list_optimizer_params:
         # Train
         logger = train(train_dataloader, val_dataloader, model_copy, optimizer, training_params,
                        scheduler=scheduler, ckpt_dir=ckpt_dir,
-                       logging_params=config['logging_params'])
+                       logging_params=config['logging_params'], teacher_model = teacher_model)
 
         # Save
         if master_process:

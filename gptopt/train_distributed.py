@@ -12,6 +12,7 @@ class Logging():
     def __init__(self):
         self.losses = []
         self.val_losses = []
+        self.teach_losses = []
         self.learning_rates = []
         self.grad_norms = []
         self.step_times = []
@@ -37,7 +38,7 @@ def eval_validation_loss(model, val_dataloader, val_accum_steps, autocast_ctxt):
     return val_loss
 
 
-def train(train_dataloader, val_dataloader, model, optimizer, training_params, logging_params, scheduler=None, ckpt_dir=""):
+def train(train_dataloader, val_dataloader, model, optimizer, training_params, logging_params, scheduler=None, ckpt_dir="", teacher_model = None):
     
     world_size, rank, local_rank, device  = get_worker_info()
     master_process = (rank == 0)
@@ -66,6 +67,8 @@ def train(train_dataloader, val_dataloader, model, optimizer, training_params, l
     if ckpt_dir == "":
         print("Will not save checkpoints as no directory is specified")
     
+    if 'schedule' in optimizer_name.lower():
+        optimizer.train()
     # Training loop
     for epoch in range(training_params['num_epochs']):
         if master_process:
@@ -75,11 +78,20 @@ def train(train_dataloader, val_dataloader, model, optimizer, training_params, l
         start_epoch = time.time()
         start_time = time.time() 
         loss_accum = 0.
+        teacher_loss_accum = 0.
         step = 1 if load_ckpt_step == 0 else int(load_ckpt_step)
         optimizer.zero_grad()
         if step != 1: print(train_dataloader.get_state())
         
-        for batch in train_dataloader:            
+        for batch in train_dataloader:          
+                        # Compute teacher loss if teacher model is provided
+            with torch.no_grad():
+                if teacher_model is not None:
+                    with autocast_ctxt:
+                        teacher_loss = teacher_model(batch[0], labels=batch[0]).loss
+                        teacher_loss /= grad_accum_steps
+                    teacher_loss_accum += teacher_loss.detach()
+
             with autocast_ctxt:
                 loss = model(batch[0], batch[1], return_logits=False)[1]
                 loss /= grad_accum_steps
@@ -95,6 +107,8 @@ def train(train_dataloader, val_dataloader, model, optimizer, training_params, l
                 if world_size > 1: dist.all_reduce(loss_accum, op=dist.ReduceOp.AVG)
                 if pass_loss:
                     optimizer.step(closure=None, loss=loss_accum)
+                elif 'schedulep' in optimizer_name.lower() or 'iams' in optimizer_name.lower():
+                    optimizer.step(closure=None, loss=loss_accum, teacher_loss=teacher_loss_accum)
                 else:
                     optimizer.step()
                 optimizer.zero_grad()
@@ -109,6 +123,8 @@ def train(train_dataloader, val_dataloader, model, optimizer, training_params, l
                 for param_group in optimizer.param_groups:
                     logger.learning_rates.append(param_group['lr'])
                 logger.losses.append(loss_accum.item())
+                if teacher_model is not None:
+                    logger.teach_losses.append(teacher_loss_accum.item())
                 if hasattr(optimizer, 'step_size_list'):  
                     logger.step_size_list = optimizer.step_size_list  
                 
