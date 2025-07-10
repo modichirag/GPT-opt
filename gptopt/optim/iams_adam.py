@@ -81,7 +81,6 @@ class IAMSAdam(torch.optim.Optimizer):
         _norm = 0.
         _dot = 0.
         self._number_steps += 1
-        average_precon =0
         ############################################################
         for group in self.param_groups:
             lr = group['lr']
@@ -136,7 +135,6 @@ class IAMSAdam(torch.optim.Optimizer):
                 state = self.state[p]
                 grad_avg_sq =  state['grad_avg_sq']
                 Dk = grad_avg_sq.div(bias_correction2).sqrt().add(eps)
-                # average_precon += (torch.mean(1/Dk)/num_params).item()
                 z = state['z']
                 if weight_decay > 0.0:
                     z.add_(p.data, alpha= (-lr*weight_decay))  # z = z - lr*wd*x

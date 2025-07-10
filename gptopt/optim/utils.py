@@ -9,6 +9,10 @@ from .muon import Muon
 from .sign_gd import SignGD
 from .iams_adam import IAMSAdam
 from .iams import IAMS
+from .schedulefree import SGDScheduleFree
+from .schedulep import SGDScheduleP
+from .adamw_schedulefree import AdamWScheduleFree   
+from .adamw_schedulep import AdamWScheduleP
 # from .sps import SPS
 # from .adabound import AdaBoundW
 # from .adabelief import AdaBelief
@@ -30,6 +34,44 @@ def get_optimizer(opt_config: dict, lr = 1e-3) -> Tuple[torch.optim.Optimizer, d
         
         hyperp = {'lr': lr,
                   'weight_decay': opt_config.get('weight_decay', 0)
+                  }
+    elif name == 'sgd-schedulefree':
+        opt_obj = SGDScheduleFree
+        hyperp = {'lr': lr,
+                  'momentum': opt_config.get('momentum', 0.9),
+                  'weight_decay': opt_config.get('weight_decay', 0),
+                  'warmup_steps': opt_config.get('warmup_steps', 0),
+                  'r': opt_config.get('r', 0.0),
+                  'weight_lr_power': opt_config.get('weight_lr_power', 2.0),
+                  'foreach': opt_config.get('foreach', True)
+                  }
+    elif name == 'sgd-schedulep': 
+        opt_obj = SGDScheduleP
+        hyperp = {'lr': lr,
+                  'momentum': opt_config.get('momentum', 0.9),
+                  'weight_decay': opt_config.get('weight_decay', 0),
+                  'warmup_steps': opt_config.get('warmup_steps', 0),
+                  'r': opt_config.get('r', 0.0),
+                  'weight_lr_power': opt_config.get('weight_lr_power', 2.0),
+                  'foreach': opt_config.get('foreach', True),
+                  'lb': opt_config.get('lb', 0.0)
+                  }
+    elif name == 'adamw-schedulefree':
+        opt_obj = AdamWScheduleFree
+        hyperp = {'lr': lr,
+                  'weight_decay': opt_config.get('weight_decay', 0),
+                  'betas': opt_config.get('betas', (0.9, 0.999)),
+                  'eps': opt_config.get('eps', 1e-8),
+                  'foreach': opt_config.get('foreach', True)
+                  }
+    elif name == 'adamw-schedulep':   
+        opt_obj = AdamWScheduleP
+        hyperp = {'lr': lr,
+                  'weight_decay': opt_config.get('weight_decay', 0),
+                  'betas': opt_config.get('betas', (0.9, 0.999)),
+                  'eps': opt_config.get('eps', 1e-8),
+                  'foreach': opt_config.get('foreach', True),
+                  'lb': opt_config.get('lb', 0.0)
                   }
     elif name == 'iams':
         opt_obj = IAMS
@@ -263,6 +305,25 @@ def get_scheduler(config: dict, opt: torch.optim.Optimizer, total_iterations = N
             else:
                 # Linearly decay after warm-up
                 return max(0.1, 1.0 - (step - num_warmup_steps) / (total_iterations - num_warmup_steps))
+
+        scheduler = LambdaLR(opt, lr_lambda=get_lr)
+
+    elif 'warm-up-constant-linear' in name:  # New scheduler
+        num_warmup_steps = int(config['warm_up_fraction'] * total_iterations)
+        num_cooldown_steps = int(config['cool_down_fraction'] * total_iterations)
+        num_constant_steps = total_iterations - num_warmup_steps - num_cooldown_steps
+        min_lr = config.get('min_lr', 1e-7)  # Default minimal learning rate
+
+        def get_lr(step):
+            if step < num_warmup_steps:
+                return step / num_warmup_steps  # Linear warm-up
+            elif step < num_warmup_steps + num_constant_steps:
+                return 1.0  # Constant learning rate
+            elif num_cooldown_steps > 0:
+                # Linear decay during cool-down
+                return max(min_lr, 1.0 - (step - num_warmup_steps - num_constant_steps) / num_cooldown_steps)
+            else:
+                return min_lr  # Minimum learning rate if no cool-down phase
 
         scheduler = LambdaLR(opt, lr_lambda=get_lr)
         

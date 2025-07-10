@@ -67,14 +67,14 @@ def train(train_dataloader, val_dataloader, model, optimizer, training_params, l
     if ckpt_dir == "":
         print("Will not save checkpoints as no directory is specified")
     
-    if 'schedule' in optimizer_name.lower():
-        optimizer.train()
+    
     # Training loop
     for epoch in range(training_params['num_epochs']):
         if master_process:
             print(f"Epoch {epoch+1} of {training_params['num_epochs']}")
 
         model.train()
+
         start_epoch = time.time()
         start_time = time.time() 
         loss_accum = 0.
@@ -83,7 +83,9 @@ def train(train_dataloader, val_dataloader, model, optimizer, training_params, l
         optimizer.zero_grad()
         if step != 1: print(train_dataloader.get_state())
         
-        for batch in train_dataloader:          
+        for batch in train_dataloader: 
+            if 'schedule' in optimizer_name.lower():
+                optimizer.train()         
                         # Compute teacher loss if teacher model is provided
             with torch.no_grad():
                 if teacher_model is not None:
@@ -125,8 +127,6 @@ def train(train_dataloader, val_dataloader, model, optimizer, training_params, l
                 logger.losses.append(loss_accum.item())
                 if teacher_model is not None:
                     logger.teach_losses.append(teacher_loss_accum.item())
-                if hasattr(optimizer, 'step_size_list'):  
-                    logger.step_size_list = optimizer.step_size_list  
                 
                 if (step % logging_params['log_step'] == 0) & master_process:
                     tps = training_params["tokens_processed"] / step_time
@@ -134,6 +134,8 @@ def train(train_dataloader, val_dataloader, model, optimizer, training_params, l
                     print(f"Time taken : {step_time*1000:0.1f}ms | Tokens/s : {tps/1000:0.1f}k | Loss : {loss_accum.item():0.3f}")
                     
                 if (step % logging_params['val_step'] == 0):
+                    if 'schedule' in optimizer_name.lower():
+                        optimizer.eval()
                     val_loss = eval_validation_loss(model, val_dataloader, val_accum_steps, autocast_ctxt)
                     logger.val_losses.append(val_loss.item())
 
@@ -145,6 +147,7 @@ def train(train_dataloader, val_dataloader, model, optimizer, training_params, l
                         with open(ckpt_dir + '/log.json', 'w') as file:
                             json.dump(logger.__dict__, file)
                 loss_accum = 0.
+                teacher_loss_accum =0.
                 start_time = time.time() 
             step += 1
             
@@ -165,5 +168,7 @@ def train(train_dataloader, val_dataloader, model, optimizer, training_params, l
                     json.dump(logger.__dict__, file)
                 
     if hasattr(optimizer, 'step_size_list'):      # Check if optimizer has a step_size_list attribute
-        logger.step_size_list = optimizer.step_size_list  
+        logger.learning_rates = optimizer.step_size_list 
+    elif 'step_size_list' in optimizer.state:
+        logger.learning_rates = optimizer.state['step_size_list']
     return logger

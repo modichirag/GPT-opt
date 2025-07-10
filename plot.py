@@ -46,6 +46,9 @@ def plot_final_loss_vs_lr(outputs, colormap, outfilename, val=False):
             methods[name] = {'lrs': [], 'losses': []}
         methods[name]['lrs'].append(lr)
         methods[name]['losses'].append(final_loss)
+        if 'teacher_loss' in output and 'teacher_loss' not in methods:
+            methods['teacher_loss'] = { 'losses': []}
+            methods['teacher_loss']['losses'] = output['teacher_loss']
 
     # Plot each method as a line
     lower_bound = 3.2
@@ -130,39 +133,38 @@ def main(config_file=None):
                 'adam': '#FF6B35',
                 'adamw': '#FF6B35',
                 'adam-sch': '#FF6B35',
-                'momo': '#61ACE5',
-                'momo-adam': '#00518F',
+                'iams': '#61ACE5',
+                'iams-adam': '#00518F',
                 'teacher': 'k',
                 'muon': '#8A2BE2',  # Added a new color for "muon" (blue-violet)
                 'muon-nonlmo': '#FFFF00',
                 'muon-nonlmo-fro_approx': '#000000',
-                'muon-nonlmo-nuc_fro': '#000000',
-                'muon-nonlmo-nuc_past': '#808080',
-                'muon-l2_prod': '#008000',
-                'muon-nonlmo-l2_prod': '#FF0000',
-                'muon-rms': '#7FFFD4',
+                'sgd-schedulep': '#808080',
+                'sgd-schedulefree': '#008000',
+                'adamw-schedulefree': '#FF0000',
+                'adamw-scheduler': '#7FFFD4',
                 'muon-nonlmo-rms': '#BE6400',
                 'muon-l2_prod-rms': '#FF00FF',
                 'muon-nonlmo-l2_prod-rms': '#FFD700',
                 'sign-gd': '#61ACE5',
                 'sign-gd-nonlmo': '#00518F',
     }
-    linestylemap = {'momo': None,
+    linestylemap = {'iams': None,
                     'sgd-m': None,
                     'sgd-sch': '--',
                     'teacher': '--',
-                    'momo-adam': None,
+                    'iams-adam': None,
                     'adam': None,
                     'adamw': None,
                     'adam-sch': '--',
                     'muon': None,
                     'muon-nonlmo': None,
-                    'muon-nonlmo-fro_approx': None,
-                    'muon-nonlmo-nuc_fro': None,
-                    'muon-nonlmo-nuc_past': None,
+                    'sgd-schedulep': None,
+                    'sgd-schedulefree': None,
+                    'teacher': None,
                     'muon-l2_prod': None,
-                    'muon-nonlmo-l2_prod': None,
-                    'muon-rms': None,
+                    'adamw-schedulefree': '--',
+                    'adamw-schedulep': '--',
                     'muon-nonlmo-rms': None,
                     'muon-l2_prod-rms': None,
                     'muon-nonlmo-l2_prod-rms': None,
@@ -203,7 +205,7 @@ def main(config_file=None):
 
 
     # Plot learning rates
-    for method_subset in [['sgd-m', 'sgd-sch', 'momo'], ['adam', 'adam-sch', 'momo-adam']]:
+    for method_subset in [['sgd-m', 'sgd-sch', 'iams', 'schedulep'], ['adam', 'adam-sch', 'iams-adam', 'adamw-schedulep']]:
         fig, ax = plt.subplots(figsize=(4, 3))
         subset_outputs = [output for output in outputs if output['name'].split('-lr-')[0] in method_subset]
         plot_data(ax, subset_outputs, config['training_params']['num_epochs'], 'learning_rates', 'Learning rate', colormap, linestylemap, lr_ranges,  get_alpha_from_lr)
@@ -228,13 +230,12 @@ def main(config_file=None):
     # Plot loss curves of tuned algorithms.
     plot_tuned_curves(outputs, colormap, linestylemap, outfilename, config['training_params']['num_epochs'], wallclock=False, val=False)
     plot_tuned_curves(outputs, colormap, linestylemap, outfilename, config['training_params']['num_epochs'], wallclock=False, val=True)
-    #plot_tuned_curves(outputs, colormap, linestylemap, outfilename, config['training_params']['num_epochs'], wallclock=True, val=False)
-    #plot_tuned_curves(outputs, colormap, linestylemap, outfilename, config['training_params']['num_epochs'], wallclock=True, val=True)
+
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Plotting gpt_distill outputs.')
-    parser.add_argument('--config', type=str, help='Path to config file', default=None)
+    parser.add_argument('config', type=str, nargs='?', help='Path to config file', default=None)
 
     args = parser.parse_args()
     if args.config:

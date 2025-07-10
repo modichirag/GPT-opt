@@ -79,12 +79,12 @@ def plot_step_size_and_lr(ax, outputs, colormap, linestylemap, lr_ranges, alpha_
                     linestyle=linestylemap[name],
                     alpha=alpha)
 
-            ax.plot(range(len(output['learning_rates'])),
-                    output['learning_rates'],
-                    color=colormap[name],
-                    linewidth=1.5,
-                    linestyle='--',
-                    alpha=alpha)
+            # ax.plot(range(len(output['learning_rates'])),
+            #         output['learning_rates'],
+            #         color=colormap[name],
+            #         linewidth=1.5,
+            #         linestyle='--',
+            #         alpha=alpha)
 
             plotted_methods.add(name)
 
