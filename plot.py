@@ -27,7 +27,7 @@ def load_outputs(output_dir):
     return outputs
 
 
-def plot_final_loss_vs_lr(outputs, colormap, outfilename, val=False):
+def plot_final_loss_vs_lr(outputs, colormap, linestylemap, outfilename, val=False):
     """Plot final loss versus learning rate as lines for each method."""
     fig, ax = plt.subplots(figsize=(6, 4))
     methods = {}
@@ -46,24 +46,31 @@ def plot_final_loss_vs_lr(outputs, colormap, outfilename, val=False):
             methods[name] = {'lrs': [], 'losses': []}
         methods[name]['lrs'].append(lr)
         methods[name]['losses'].append(final_loss)
-        if 'teacher_loss' in output and 'teacher_loss' not in methods:
-            methods['teacher_loss'] = { 'losses': []}
-            methods['teacher_loss']['losses'] = output['teacher_loss']
+    # setting up teacherplot
+    for output in outputs:
+        name, lr = output['name'].split('-lr-')
+        if 'teach_losses' in output and 'teach_losses' not in methods:
+            methods['teacher'] = { 'losses': []}
+            methods['teacher']['losses'] = np.mean(output['teach_losses'])*np.ones(len(output['losses']))
+            methods['teacher']['lrs'] = methods[name]['lrs']
 
     # Plot each method as a line
-    lower_bound = 3.2
+    lower_bound = 100.0
     upper_bound = 0.0
     for name, data in methods.items():
         sorted_indices = sorted(range(len(data['lrs'])), key=lambda i: data['lrs'][i])  # Sort by learning rate
         sorted_lrs = [data['lrs'][i] for i in sorted_indices]
         sorted_losses = [data['losses'][i] for i in sorted_indices]
-        ax.plot(sorted_lrs, sorted_losses, label=name, color=colormap[name], linewidth=2)
+        ax.plot(sorted_lrs, sorted_losses, label=name, color=colormap[name], linestyle = linestylemap[name], linewidth=2)
         current_ub = np.max(sorted_losses)
+        current_lb = np.min(sorted_losses)
         if current_ub > upper_bound:
             upper_bound = current_ub
+        if current_lb < lower_bound:
+            lower_bound = current_lb
     upper_bound *= 1.1
     upper_bound = min(upper_bound, 10.0)
-
+    lower_bound *= 0.95
     ax.set_xscale('log')
     ax.set_ylim([lower_bound, upper_bound])
     ax.set_xlabel('Learning Rate')
@@ -93,19 +100,29 @@ def plot_tuned_curves(outputs, colormap, linestylemap, outfilename, num_epochs, 
         if name not in tuned_methods:
             tuned_methods[name] = {'best_loss': final_loss, 'best_lr': lr, 'outputs': dict(output)}
         else:
-            if final_loss < tuned_methods[name]['best_loss']:
+            if final_loss < tuned_methods[name]['best_loss'] or np.isnan(tuned_methods[name]['best_loss']):
                 tuned_methods[name]['best_loss'] = final_loss
                 tuned_methods[name]['best_lr'] = lr
                 tuned_methods[name]['outputs'] = dict(output)
-
+    if val:
+        print("Best Validation losses:")
+    else:
+        print("Best losses:")
+    for name in tuned_methods:
+        print(f"{name}: {tuned_methods[name]['best_loss']} at lr {tuned_methods[name]['best_lr']}")
     # Plot loss of tuned methods.
     tuned_outputs = [tuned_methods[name]['outputs'] for name in tuned_methods]
     lr_ranges = {name: [tuned_methods[name]['best_lr']] * 2 for name in tuned_methods}
     plot_data(ax, tuned_outputs, num_epochs, field, 'Loss', colormap, linestylemap, lr_ranges, get_alpha_from_lr, wallclock=wallclock)
-    upper_bound = np.max([output[field][round(0.2 * len(output[field]))] for output in tuned_outputs])
+    upper_bound = np.max([output[field][round(0.2 * len(output[field]))] for output in tuned_outputs ])
+    lower_bound = 100
+    for output in tuned_outputs:
+        lower_bound = float(np.minimum(lower_bound, np.min(output[field] ) ))
     upper_bound = min(upper_bound, 10.0) if not np.isnan(upper_bound) else 10.0
+    lower_bound = max(lower_bound, 3.0) if not np.isnan(lower_bound) else 3.0
+    lower_bound *= 0.95
     ax.legend(loc='upper right', fontsize=10)
-    ax.set_ylim(3.2, upper_bound)
+    ax.set_ylim(lower_bound, upper_bound)
     fig.subplots_adjust(top=0.99, bottom=0.155, left=0.12, right=0.99)
     suffix = "_tuned"
     if wallclock:
@@ -128,34 +145,47 @@ def main(config_file=None):
     for output in outputs:  # Smoothing
         smoothen_dict(output, num_points=None, beta =0.05)
 
-    colormap = {'sgd-m': '#B3CBB9',
-                'sgd-sch': '#B3CBB9',
-                'adam': '#FF6B35',
-                'adamw': '#FF6B35',
-                'adam-sch': '#FF6B35',
-                'iams': '#61ACE5',
-                'iams-adam': '#00518F',
-                'teacher': 'k',
-                'muon': '#8A2BE2',  # Added a new color for "muon" (blue-violet)
-                'muon-nonlmo': '#FFFF00',
-                'muon-nonlmo-fro_approx': '#000000',
-                'sgd-schedulep': '#808080',
-                'sgd-schedulefree': '#008000',
-                'adamw-schedulefree': '#FF0000',
-                'adamw-scheduler': '#7FFFD4',
-                'muon-nonlmo-rms': '#BE6400',
-                'muon-l2_prod-rms': '#FF00FF',
-                'muon-nonlmo-l2_prod-rms': '#FFD700',
-                'sign-gd': '#61ACE5',
-                'sign-gd-nonlmo': '#00518F',
+
+    colormap = {
+        'sgd-m': '#B3CBB9',  # Keep the same color for 'sgd-m'
+        'adamw': '#FF6B35',  # Keep the same color for 'adamw'
+        'iams': '#61ACE5',  # Light blue for 'iams'
+        'iams-adam': '#1B75BC',  # Darker blue for 'iams-adam' (similar to 'iams')
+        'teacher': 'k',  # Keep black for 'teacher'
+        'sgd-schedulep': '#FF00FF',  # Magenta for 'sgd-schedulep' (similar to 'adamw-schedulep')
+        'adamw-schedulep': '#8B008B',  # Magenta for 'adamw-schedulep' (same as 'sgd-schedulep')
+        'sgd-schedulefree': '#008000',  # Green for 'sgd-schedulefree' (keep the same)
+        'adamw-schedulefree': '#006400',  # Dark green for 'adamw-schedulefree' (similar to 'sgd-schedulefree')
     }
+
+    # colormap = {'sgd-m': '#B3CBB9',
+    #             'sgd-sch': '#B3CBB9',
+    #             'adam': '#FF6B35',
+    #             'adamw': '#FF6B35',
+    #             'adam-sch': '#FF6B35',
+    #             'iams': '#61ACE5',
+    #             'iams-adam': '#00518F',
+    #             'teacher': 'k',
+    #             'muon': '#8A2BE2',  # Added a new color for "muon" (blue-violet)
+    #             'muon-nonlmo': '#FFFF00',
+    #             'muon-nonlmo-fro_approx': '#000000',
+    #             'sgd-schedulep': '#808080',
+    #             'sgd-schedulefree': '#008000',
+    #             'adamw-schedulefree': '#FF0000',
+    #             'adamw-schedulep': '#FF00FF',
+    #             'muon-nonlmo-rms': '#BE6400',
+    #             'muon-l2_prod-rms': '#FF00FF',
+    #             'muon-nonlmo-l2_prod-rms': '#FFD700',
+    #             'sign-gd': '#61ACE5',
+    #             'adamw-gyess': '#7FFFD4',
+    # }
     linestylemap = {'iams': None,
                     'sgd-m': None,
                     'sgd-sch': '--',
                     'teacher': '--',
                     'iams-adam': None,
                     'adam': None,
-                    'adamw': None,
+                    'adamw': '--',
                     'adam-sch': '--',
                     'muon': None,
                     'muon-nonlmo': None,
@@ -169,7 +199,6 @@ def main(config_file=None):
                     'muon-l2_prod-rms': None,
                     'muon-nonlmo-l2_prod-rms': None,
                     'sign-gd': None,
-                    'sign-gd-nonlmo': None,
     }
 
     # Collect learning rate ranges for each method
@@ -189,8 +218,8 @@ def main(config_file=None):
     mpl.rcParams.update(mpl.rcParamsDefault)
 
     # Plot final loss vs learning rate
-    plot_final_loss_vs_lr(outputs, colormap, outfilename)
-    plot_final_loss_vs_lr(outputs, colormap, outfilename, val=True)
+    plot_final_loss_vs_lr(outputs, colormap, linestylemap, outfilename)
+    plot_final_loss_vs_lr(outputs, colormap, linestylemap, outfilename, val=True)
 
     # Plot loss
     initial_loss = outputs[0]['losses'][0] if outputs and 'losses' in outputs[0] else 1.0  # Default to 1.0 if not available
@@ -198,6 +227,7 @@ def main(config_file=None):
     fig, ax = plt.subplots(figsize=(4, 3))
     plot_data(ax, outputs,  config['training_params']['num_epochs'], 'losses', 'Loss', colormap, linestylemap, lr_ranges, get_alpha_from_lr)
     lower_bound = min(min(output['losses']) for output in outputs if 'losses' in output)
+    lower_bound *= 0.95 
     ax.set_ylim(lower_bound, upper_bound) # Set the upper bound
     ax.legend(loc='upper right', fontsize=10)
     fig.subplots_adjust(top=0.99, bottom=0.155, left=0.12, right=0.99)
@@ -205,14 +235,14 @@ def main(config_file=None):
 
 
     # Plot learning rates
-    for method_subset in [['sgd-m', 'sgd-sch', 'iams', 'schedulep'], ['adam', 'adam-sch', 'iams-adam', 'adamw-schedulep']]:
+    for method_subset in [['sgd-m', 'sgd-sch', 'iams', 'sgd-schedulep'], ['adam', 'adam-sch', 'iams-adam', 'adamw-schedulep']]:
         fig, ax = plt.subplots(figsize=(4, 3))
         subset_outputs = [output for output in outputs if output['name'].split('-lr-')[0] in method_subset]
         plot_data(ax, subset_outputs, config['training_params']['num_epochs'], 'learning_rates', 'Learning rate', colormap, linestylemap, lr_ranges,  get_alpha_from_lr)
         ax.legend(loc='upper right', fontsize=10)
         fig.subplots_adjust(top=0.935, bottom=0.03, left=0.155, right=0.99)
-        name = 'figures/lr-' if 'sgd-m' in method_subset else 'figures/lr-adam-'
-        fig.savefig(name + outfilename + '.pdf', format='pdf', bbox_inches='tight')
+        name = '-lr' if 'sgd-m' in method_subset else '-lr-adam'
+        fig.savefig('figures/' + outfilename + name + '.pdf', format='pdf', bbox_inches='tight')
 
     # Plot step size lists
     fig, ax = plt.subplots(figsize=(4, 3))
@@ -225,7 +255,7 @@ def main(config_file=None):
     ax.set_xlabel('Step')
     ax.set_ylabel('Learning Rate')
     fig.subplots_adjust(top=0.99, bottom=0.155, left=0.12, right=0.99)
-    fig.savefig('figures/step_size-' + outfilename + '.pdf', format='pdf', bbox_inches='tight')
+    fig.savefig('figures/' + outfilename + '-step_size-.pdf', format='pdf', bbox_inches='tight')
 
     # Plot loss curves of tuned algorithms.
     plot_tuned_curves(outputs, colormap, linestylemap, outfilename, config['training_params']['num_epochs'], wallclock=False, val=False)

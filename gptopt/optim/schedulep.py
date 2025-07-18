@@ -16,9 +16,7 @@ class SGDScheduleP(torch.optim.Optimizer):
     r"""
     Schedule-Free SGD
     As the name suggests, no scheduler is needed with this optimizer. 
-    To add warmup, rather than using a learning rate schedule you can just
-    set the warmup_steps parameter.
-
+   
     This optimizer requires that .train() and .eval() be called before the
     beginning of training and evaluation respectively. The optimizer should
     also be placed in eval mode when saving checkpoints.
@@ -33,7 +31,6 @@ class SGDScheduleP(torch.optim.Optimizer):
             (default: 0.9)
         weight_decay (float): 
             Weight decay, i.e. a L2 penalty (default: 0).
-        warmup_steps (int): Enables a linear learning rate warmup (default 0).
         r (float): Use polynomial weighting in the average 
             with power r (default 0).
         weight_lr_power (float): During warmup, the weights in the average will
@@ -48,11 +45,12 @@ class SGDScheduleP(torch.optim.Optimizer):
                  lr: Union[float, torch.Tensor] = 1.0,
                  momentum: float = 0.9,
                  weight_decay: float = 0,
-                 r: float = 0.0,
+                 ct_schedule: Union[float, str] = 'theory',
                  weight_lr_power: float = 2,
                  foreach: Optional[bool] = hasattr(torch, "_foreach_mul_"),
                  lb: float=0.0,
                  ):
+
         if lr < 0.0:
             raise ValueError("Invalid learning rate: {}".format(lr))
         if weight_decay < 0.0:
@@ -62,7 +60,7 @@ class SGDScheduleP(torch.optim.Optimizer):
         
         defaults = dict(lr=lr, 
                         momentum=momentum, 
-                        r=r,
+                        ct_schedule = ct_schedule,
                         k=0,
                         train_mode=False,
                         weight_sum=0.0,
@@ -103,7 +101,7 @@ class SGDScheduleP(torch.optim.Optimizer):
 
     
     @torch.no_grad()
-    def step(self, closure =None, loss: torch.Tensor=None, teacher_loss: float=None) -> Optional[float]:
+    def step(self, closure =None, loss: float=None, teacher_loss: float=None) -> Optional[float]:
         """Performs a single optimization step.
 
         Arguments:
@@ -127,31 +125,35 @@ class SGDScheduleP(torch.optim.Optimizer):
                 if 'z' not in self.state[p]:
                     self.state[p]['z'] = torch.clone(p, memory_format=torch.preserve_format)
                 z = self.state[p]['z']
-                _dot += torch.sum(torch.mul(grad, z-p.data))
-                _norm += torch.sum(torch.mul(grad, grad))
+                _dot += torch.sum(torch.mul(grad, z-p.data)).item()
+                _norm += torch.sum(torch.mul(grad, grad)).item()
 
         for group in self.param_groups:
             momentum = group['momentum']
             lr = group['lr']
             weight_decay = group['weight_decay']
             k = group['k']
-            warmup_steps = group['warmup_steps']
 
             lr = group['lr']
             group['scheduled_lr'] = lr # For logging purposes
 
-            weight_lr_power = group['weight_lr_power']
-            
-            r = group['r']
-            lr_max = group['lr_max'] = max(lr, group['lr_max'])
-            
-            weight = ((k+1)**r) * (lr_max**weight_lr_power)
+            if group['ct_schedule'] == 'schedulefree':
+                lr_max = group['lr_max'] = max(lr, group['lr_max'])
+                weight_lr_power = group['weight_lr_power']
+                weight =   (lr_max**weight_lr_power)
+            elif group['ct_schedule'] == 'theory':
+                weight =   lr
+            else:
+                weight = 1.0
+                
             weight_sum = group['weight_sum'] = group['weight_sum'] + weight
-
             try:
                 ckp1 = weight/weight_sum
             except ZeroDivisionError:
                 ckp1 = 0
+            # If ct_schedule is a float, use it directly
+            if isinstance(group['ct_schedule'], float):
+                ckp1 = group['ct_schedule']
 
             active_p = [p for p in group['params'] if p.grad is not None]
 
@@ -160,9 +162,8 @@ class SGDScheduleP(torch.optim.Optimizer):
             #         self.state[p]['z'] = torch.clone(p, memory_format=torch.preserve_format)
            ### Compute adaptive step size
             this_lb = self.lb if not teacher_loss else teacher_loss
-            t1 = loss.item() - this_lb + _dot
+            t1 = loss  - this_lb + _dot
             eta = max(t1, 0) / _norm
-            eta = eta.item() # make scalar
             lr = min(lr, eta)
             
             if group['foreach'] and len(active_p) > 0:

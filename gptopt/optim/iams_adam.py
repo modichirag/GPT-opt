@@ -55,7 +55,7 @@ class IAMSAdam(torch.optim.Optimizer):
         self._number_steps = 0
         self.state['step_size_list'] = list() # for storing the adaptive step size term
         return
-    def step(self, closure =None, loss: torch.Tensor=None, teacher_loss: float=None):
+    def step(self, closure =None, loss: float=None, teacher_loss: float=None):
         """
         Performs a single optimization step.
         Parameters
@@ -107,10 +107,9 @@ class IAMSAdam(torch.optim.Optimizer):
                 bias_correction2 = 1 - beta2 ** self._number_steps
                 Dk = grad_avg_sq.div(bias_correction2).sqrt().add(eps) # = D_k
                 z = state['z']
-                _dot += torch.sum(torch.mul(grad, z-p.data))
-                _norm += torch.sum(grad.mul(grad.div(Dk)))
+                _dot += torch.sum(torch.mul(grad, z-p.data)).item()
+                _norm += torch.sum(grad.mul(grad.div(Dk))).item()
 
-        num_params = sum(len(group['params']) for group in self.param_groups)
         #################
         # Update
         for group in self.param_groups:
@@ -125,9 +124,8 @@ class IAMSAdam(torch.optim.Optimizer):
                 lmbda = self._number_steps +1     # lmbda_t = t
             ### Compute adaptive step size
             this_teacher_loss = self.lb if not teacher_loss else teacher_loss
-            t1 = loss.item() - this_teacher_loss + _dot
+            t1 = loss  - this_teacher_loss + _dot
             eta = max(t1, 0) / _norm
-            eta = eta.item() # make scalar
             tau = min(lr, eta)
             ### Update params
             for p in group['params']:

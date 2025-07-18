@@ -44,11 +44,6 @@ def train(train_dataloader, val_dataloader, model, optimizer, training_params, l
     master_process = (rank == 0)
     logger = Logging()
     optimizer_name = optimizer.__class__.__name__
-    if 'Momo' in optimizer_name:
-        pass_loss = True
-    else:
-        pass_loss = False
-    if master_process: print(f"Set pass_loss to {pass_loss} for optimizer {optimizer_name}")
 
     autocast_ctxt = contextlib.nullcontext()
     if training_params['autocast']:
@@ -107,10 +102,11 @@ def train(train_dataloader, val_dataloader, model, optimizer, training_params, l
                 loss.backward()
                 norm = torch.nn.utils.clip_grad_norm_(model.parameters(), max_grad_norm)
                 if world_size > 1: dist.all_reduce(loss_accum, op=dist.ReduceOp.AVG)
-                if pass_loss:
+                
+                if 'momo' in optimizer_name.lower():
                     optimizer.step(closure=None, loss=loss_accum)
                 elif 'schedulep' in optimizer_name.lower() or 'iams' in optimizer_name.lower():
-                    optimizer.step(closure=None, loss=loss_accum, teacher_loss=teacher_loss_accum)
+                    optimizer.step(closure=None, loss=loss_accum.item(), teacher_loss=teacher_loss_accum.item())
                 else:
                     optimizer.step()
                 optimizer.zero_grad()
@@ -124,6 +120,7 @@ def train(train_dataloader, val_dataloader, model, optimizer, training_params, l
                 logger.grad_norms.append(norm.item())
                 for param_group in optimizer.param_groups:
                     logger.learning_rates.append(param_group['lr'])
+                    print(f"Step {step}: Learning rate = {param_group['lr']}")
                 logger.losses.append(loss_accum.item())
                 if teacher_model is not None:
                     logger.teach_losses.append(teacher_loss_accum.item())
@@ -168,7 +165,7 @@ def train(train_dataloader, val_dataloader, model, optimizer, training_params, l
                     json.dump(logger.__dict__, file)
                 
     if hasattr(optimizer, 'step_size_list'):      # Check if optimizer has a step_size_list attribute
-        logger.learning_rates = optimizer.step_size_list 
+        logger.step_size_list = optimizer.step_size_list 
     elif 'step_size_list' in optimizer.state:
-        logger.learning_rates = optimizer.state['step_size_list']
+        logger.step_size_list = optimizer.state['step_size_list']
     return logger

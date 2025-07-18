@@ -41,8 +41,8 @@ def get_optimizer(opt_config: dict, lr = 1e-3) -> Tuple[torch.optim.Optimizer, d
                   'momentum': opt_config.get('momentum', 0.9),
                   'weight_decay': opt_config.get('weight_decay', 0),
                   'warmup_steps': opt_config.get('warmup_steps', 0),
-                  'r': opt_config.get('r', 0.0),
                   'weight_lr_power': opt_config.get('weight_lr_power', 2.0),
+                  'ct_schedule': opt_config.get('ct_schedule', 'schedulefree'),
                   'foreach': opt_config.get('foreach', True)
                   }
     elif name == 'sgd-schedulep': 
@@ -50,9 +50,8 @@ def get_optimizer(opt_config: dict, lr = 1e-3) -> Tuple[torch.optim.Optimizer, d
         hyperp = {'lr': lr,
                   'momentum': opt_config.get('momentum', 0.9),
                   'weight_decay': opt_config.get('weight_decay', 0),
-                  'warmup_steps': opt_config.get('warmup_steps', 0),
-                  'r': opt_config.get('r', 0.0),
                   'weight_lr_power': opt_config.get('weight_lr_power', 2.0),
+                  'ct_schedule': opt_config.get('ct_schedule', 'theory'),
                   'foreach': opt_config.get('foreach', True),
                   'lb': opt_config.get('lb', 0.0)
                   }
@@ -62,6 +61,8 @@ def get_optimizer(opt_config: dict, lr = 1e-3) -> Tuple[torch.optim.Optimizer, d
                   'weight_decay': opt_config.get('weight_decay', 0),
                   'betas': opt_config.get('betas', (0.9, 0.999)),
                   'eps': opt_config.get('eps', 1e-8),
+                  'weight_lr_power': opt_config.get('weight_lr_power', 2.0),
+                  'ct_schedule': opt_config.get('ct_schedule', 'schedulefree'),
                   'foreach': opt_config.get('foreach', True)
                   }
     elif name == 'adamw-schedulep':   
@@ -70,6 +71,8 @@ def get_optimizer(opt_config: dict, lr = 1e-3) -> Tuple[torch.optim.Optimizer, d
                   'weight_decay': opt_config.get('weight_decay', 0),
                   'betas': opt_config.get('betas', (0.9, 0.999)),
                   'eps': opt_config.get('eps', 1e-8),
+                  'weight_lr_power': opt_config.get('weight_lr_power', 2.0),
+                  'ct_schedule': opt_config.get('ct_schedule', 'theory'),
                   'foreach': opt_config.get('foreach', True),
                   'lb': opt_config.get('lb', 0.0)
                   }
@@ -281,13 +284,13 @@ def get_scheduler(config: dict, opt: torch.optim.Optimizer, total_iterations = N
         lr_fun = lambda epoch: (epoch+1)**(-1/2) # this value is multiplied with initial lr
         scheduler = LambdaLR(opt, lr_lambda=lr_fun)
         
-    elif 'exponential' in name:
+    elif 'exponential' == name:
         # use sth like 'exponential_60_0.5': decay by factor 0.5 every 60 epochs
         step_size = int(name.split('_')[1])
         gamma = float(name.split('_')[2])
         scheduler = StepLR(opt, step_size=step_size, gamma=gamma)
 
-    elif 'warm-up-cosine' in name:
+    elif 'warm-up-cosine' == name:
         num_warmup_steps = int(config['warm_up_fraction'] * total_iterations) 
         scheduler = get_cosine_schedule_with_warmup(
                     opt,
@@ -296,7 +299,7 @@ def get_scheduler(config: dict, opt: torch.optim.Optimizer, total_iterations = N
                     )
 
 
-    elif 'constant-linear' in name:  # New scheduler
+    elif 'constant-linear' == name:  # New scheduler
         num_warmup_steps = int(config['warm_up_fraction'] * total_iterations)
 
         def get_lr(step):
@@ -304,11 +307,14 @@ def get_scheduler(config: dict, opt: torch.optim.Optimizer, total_iterations = N
                 return 1.0  # Constant learning rate during warm-up
             else:
                 # Linearly decay after warm-up
-                return max(0.1, 1.0 - (step - num_warmup_steps) / (total_iterations - num_warmup_steps))
+                return max(1e-7, 1.0 - (step - num_warmup_steps) / (total_iterations - num_warmup_steps))
 
         scheduler = LambdaLR(opt, lr_lambda=get_lr)
 
-    elif 'warm-up-constant-linear' in name:  # New scheduler
+    elif 'warm-up-constant-linear' == name:  # New scheduler
+        assert(0.0 <= config['warm_up_fraction'] <= 1.0)
+        assert(0.0 <= config['cool_down_fraction'] <= 1.0)
+        assert(config['warm_up_fraction'] + config['cool_down_fraction'] <= 1.0)
         num_warmup_steps = int(config['warm_up_fraction'] * total_iterations)
         num_cooldown_steps = int(config['cool_down_fraction'] * total_iterations)
         num_constant_steps = total_iterations - num_warmup_steps - num_cooldown_steps
@@ -317,11 +323,12 @@ def get_scheduler(config: dict, opt: torch.optim.Optimizer, total_iterations = N
         def get_lr(step):
             if step < num_warmup_steps:
                 return step / num_warmup_steps  # Linear warm-up
-            elif step < num_warmup_steps + num_constant_steps:
+            elif step <= num_warmup_steps + num_constant_steps:
                 return 1.0  # Constant learning rate
             elif num_cooldown_steps > 0:
                 # Linear decay during cool-down
-                return max(min_lr, 1.0 - (step - num_warmup_steps - num_constant_steps) / num_cooldown_steps)
+                decay_step = step - num_warmup_steps - num_constant_steps
+                return max(min_lr, 1.0 - decay_step / num_cooldown_steps)
             else:
                 return min_lr  # Minimum learning rate if no cool-down phase
 

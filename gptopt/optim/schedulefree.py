@@ -49,7 +49,7 @@ class SGDScheduleFree(torch.optim.Optimizer):
                  momentum: float = 0.9,
                  weight_decay: float = 0,
                  warmup_steps: int = 0,
-                 r: float = 0.0,
+                 ct_schedule: Union[float, str] = 'schedulefree',
                  weight_lr_power: float = 2,
                  foreach: Optional[bool] = hasattr(torch, "_foreach_mul_"),
                  ):
@@ -62,7 +62,7 @@ class SGDScheduleFree(torch.optim.Optimizer):
 
         defaults = dict(lr=lr, 
                         momentum=momentum, 
-                        r=r,
+                        ct_schedule=ct_schedule,
                         k=0,
                         warmup_steps=warmup_steps,
                         train_mode=False,
@@ -73,7 +73,7 @@ class SGDScheduleFree(torch.optim.Optimizer):
                         weight_decay=weight_decay,
                         foreach=foreach)
         super().__init__(params, defaults)
-    
+        self.state['step_size_list'] = list()
     @torch.no_grad()
     def eval(self):
         for group in self.param_groups:
@@ -133,14 +133,16 @@ class SGDScheduleFree(torch.optim.Optimizer):
             lr = group['lr']*sched
             group['scheduled_lr'] = lr # For logging purposes
 
-            weight_lr_power = group['weight_lr_power']
-            
-            r = group['r']
-            lr_max = group['lr_max'] = max(lr, group['lr_max'])
-            
-            weight = ((k+1)**r) * (lr_max**weight_lr_power)
+            if group['ct_schedule'] == 'schedulefree':
+                lr_max = group['lr_max'] = max(lr, group['lr_max'])
+                weight_lr_power = group['weight_lr_power']
+                weight =   (lr_max**weight_lr_power)
+            elif group['ct_schedule'] == 'theory':
+                weight =   lr
+            elif isinstance(group['ct_schedule'], float):
+                weight = group['ct_schedule']
+                
             weight_sum = group['weight_sum'] = group['weight_sum'] + weight
-
             try:
                 ckp1 = weight/weight_sum
             except ZeroDivisionError:
@@ -186,4 +188,5 @@ class SGDScheduleFree(torch.optim.Optimizer):
                     z.sub_(grad, alpha=lr)
 
             group['k'] = k+1
+        self.state['step_size_list'].append(lr*ckp1)
         return loss

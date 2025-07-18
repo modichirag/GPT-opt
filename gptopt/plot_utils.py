@@ -57,9 +57,8 @@ def plot_step_size_and_lr(ax, outputs, colormap, linestylemap, lr_ranges, alpha_
         """Generalized function to plot step_size_list and learning_rates."""
         plotted_methods = set()
         for output in outputs:
-            if 'step_size_list' not in output or 'learning_rates' not in output:
+            if 'step_size_list' not in output:
                 continue
-
             name, lr = output['name'].split('-lr-')
             lr = float(lr)
             alpha = alpha_func(lr, lr_range=lr_ranges[name])

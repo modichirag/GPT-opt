@@ -49,7 +49,7 @@ class IAMS(torch.optim.Optimizer):
         self.state['step_size_list'] = list() # for storing the adaptive step size term
         self.state['beta_list'] = list()
         return
-    def step(self, closure =None, loss: torch.Tensor=None, teacher_loss: float=None):
+    def step(self, closure =None, loss: float=None, teacher_loss: float=None):
         """
         Performs a single optimization step.
         Parameters
@@ -84,8 +84,8 @@ class IAMS(torch.optim.Optimizer):
                 if self._number_steps == 0:
                     state['z'] = p.detach().clone().to(p.device)
                 z = state['z']
-                _dot += torch.sum(torch.mul(grad, z-p.data))
-                _norm += torch.sum(torch.mul(grad, grad))
+                _dot += torch.sum(torch.mul(grad, z-p.data)).item()
+                _norm += torch.sum(torch.mul(grad, grad)).item()
         #################
         # Update
         for group in self.param_groups:
@@ -97,9 +97,8 @@ class IAMS(torch.optim.Optimizer):
                 lmbda = self._number_steps +1     # lmbda_t = t
             ### Compute adaptive step size
             this_lb = self.lb if not teacher_loss else teacher_loss
-            t1 = loss.item() - this_lb + _dot
+            t1 = loss  - this_lb + _dot
             eta = max(t1, 0) / _norm
-            eta = eta.item() # make scalar
             tau = min(lr, eta)
             ### Update params
             for p in group['params']:

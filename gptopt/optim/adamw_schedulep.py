@@ -53,7 +53,7 @@ class AdamWScheduleP(torch.optim.Optimizer):
                  betas: Tuple[float, float] = (0.9, 0.999),
                  eps: float = 1e-8,
                  weight_decay: float = 0,
-                 r: float = 0.0,
+                 ct_schedule: Union[float, str] = 'theory',
                  weight_lr_power: float = 2.0,
                  foreach: Optional[bool] = hasattr(torch, "_foreach_mul_"),
                  lb: float = 0.0
@@ -62,7 +62,7 @@ class AdamWScheduleP(torch.optim.Optimizer):
         defaults = dict(lr=lr, 
                         betas=betas, 
                         eps=eps,
-                        r=r,
+                        ct_schedule=ct_schedule,
                         k=0,
                         train_mode=False,
                         weight_sum=0.0,
@@ -101,7 +101,7 @@ class AdamWScheduleP(torch.optim.Optimizer):
                 group['train_mode'] = True
 
     @torch.no_grad()
-    def step(self, closure =None, loss: torch.Tensor=None, teacher_loss: float=None) -> Optional[float]:
+    def step(self, closure =None, loss: float=None, teacher_loss: float=None) -> Optional[float]:
         """Performs a single optimization step.
 
         Arguments:
@@ -112,8 +112,6 @@ class AdamWScheduleP(torch.optim.Optimizer):
             raise Exception("Optimizer was not in train mode when step is called. "
                             "Please insert .train() and .eval() calls on the "
                             "optimizer. See documentation for details.")
-
-        loss = None
         if closure is not None:
             with torch.enable_grad():
                 loss = closure()
@@ -138,8 +136,8 @@ class AdamWScheduleP(torch.optim.Optimizer):
                 grad = p.grad.data.detach() 
                 exp_avg_sq.mul_(beta2).addcmul_(grad, grad, value=1-beta2)
                 denom = exp_avg_sq.div(bias_correction2).sqrt_().add_(eps)
-                _dot += torch.sum(torch.mul(grad, z-p.data))
-                _norm += torch.sum(grad.mul(grad.div(denom)))
+                _dot += torch.sum(torch.mul(grad, z-p.data)).item()
+                _norm += torch.sum(grad.mul(grad.div(denom))).item()
 
 
         for group in self.param_groups:
@@ -147,7 +145,6 @@ class AdamWScheduleP(torch.optim.Optimizer):
             beta1, beta2 = group['betas']
             decay = group['weight_decay']
             k = group['k']
-            r = group['r']
             weight_lr_power = group['weight_lr_power']
         
             
@@ -155,24 +152,29 @@ class AdamWScheduleP(torch.optim.Optimizer):
             lr = group['lr']
             group['scheduled_lr'] = lr # For logging purposes
             
-            lr_max = group['lr_max'] = max(lr, group['lr_max'])
-            
-            weight = ((k+1)**r) * (lr_max**weight_lr_power)
+            if group['ct_schedule'] == 'schedulefree':
+                lr_max = group['lr_max'] = max(lr, group['lr_max'])
+                weight =   (lr_max**weight_lr_power)
+            elif group['ct_schedule'] == 'theory':
+                weight =   lr
+            else:
+                weight = 1.0
+                
             weight_sum = group['weight_sum'] = group['weight_sum'] + weight
-
             try:
                 ckp1 = weight/weight_sum
             except ZeroDivisionError:
                 ckp1 = 0
+            # If ct_schedule is a float, use it directly
+            if isinstance(group['ct_schedule'], float):
+                ckp1 = group['ct_schedule']
 
             active_p = [p for p in group['params'] if p.grad is not None]
 
             ### Compute adaptive step size
             this_lb = self.lb if not teacher_loss else teacher_loss
             t1 = loss - this_lb + _dot
-            # t1 = loss.item() - this_lb + _dot
             eta = max(t1, 0) / _norm
-            eta = eta.item() # make scalar
             lr = min(lr, eta)
 
             if group['foreach'] and len(active_p) > 0:
