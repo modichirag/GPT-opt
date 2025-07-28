@@ -125,16 +125,27 @@ def get_optimizer(opt_config: dict, lr = 1e-3) -> Tuple[torch.optim.Optimizer, d
             nuc_approx = "past"
         else:
             nuc_approx = None
+        if 'momo' in name:
+            truncate_model = opt_config["truncate_model"]
+            heavy_ball = True
+            nesterov = False
+        else:
+            truncate_model = None
+            heavy_ball = False
+            nesterov = True
+
         hyperp = {'lr': lr,
                   'wd': opt_config.get('weight_decay', 0),
                   'adamw_betas': opt_config.get('betas', (0.95, 0.95)),
                   'momentum': opt_config.get('momentum', 0.95),
-                  'nesterov': True,
+                  'heavy_ball': heavy_ball,
+                  'nesterov': nesterov,
                   'ns_steps': opt_config.get('ns_steps', 5),
                   'lmo': lmo,
                   'l2_prod_norm': l2_prod_norm,
                   'nuc_approx': nuc_approx,
                   'rms_layer_norm': rms_layer_norm,
+                  'truncate_model': truncate_model,
                   }
 
     elif name == 'sign-gd':

@@ -88,6 +88,7 @@ class Muon(torch.optim.Optimizer):
         muon_params: The parameters to be optimized by Muon.
         lr: The learning rate. The updates will have spectral norm of `lr`. (0.02 is a good default)
         momentum: The momentum used by the internal SGD. (0.95 is a good default)
+        heavy_ball: Whether the momentum accumulation should be a moving average.
         nesterov: Whether to use Nesterov-style momentum in the internal SGD. (recommended)
         ns_steps: The number of Newton-Schulz iterations to run. (6 is probably always enough)
         lmo: Whether to use LMO instead variational viewpoint of gradient descent to derive
@@ -99,6 +100,7 @@ class Muon(torch.optim.Optimizer):
         nuc_approx: How to approximate the gradient nuclear norm. Choices: [None, 'fro', 'past']
         rms_layer_norm: Whether to use the RMS norm the input/output space of each
         layer, which scale each layer's LR by sqrt(fan_out/fan_in).
+        truncate_model: Lower bound of loss, if using a truncated model.
         adamw_params: The parameters to be optimized by AdamW. Any parameters in `muon_params` which are
         {0, 1}-D or are detected as being the embed or lm_head will be optimized by AdamW as well.
         adamw_lr: The learning rate for the internal AdamW.
@@ -111,12 +113,14 @@ class Muon(torch.optim.Optimizer):
                  lr=1e-3,
                  wd=0.1,
                  momentum=0.95,
+                 heavy_ball=False,
                  nesterov=True,
                  ns_steps=5,
                  lmo=True,
                  l2_prod_norm=False,
                  nuc_approx=None,
                  rms_layer_norm=False,
+                 truncate_model=None,
                  adamw_betas=(0.95, 0.95),
                  adamw_eps=1e-8):
 
@@ -124,12 +128,14 @@ class Muon(torch.optim.Optimizer):
                 lr=lr,
                 wd=wd,
                 momentum=momentum,
+                heavy_ball=heavy_ball,
                 nesterov=nesterov,
                 ns_steps=ns_steps,
                 lmo=lmo,
                 l2_prod_norm=l2_prod_norm,
                 nuc_approx=nuc_approx,
                 rms_layer_norm=rms_layer_norm,
+                truncate_model=truncate_model,
                 adamw_betas=adamw_betas,
                 adamw_eps=adamw_eps,
         )
@@ -160,18 +166,30 @@ class Muon(torch.optim.Optimizer):
                 # Do not use Muon for parameters in adamw_params
                 self.state[p]["use_muon"] = False
 
-    def step(self, closure=None):
+        self.use_truncation = truncate_model is not None
+        if self.use_truncation:
+            self.loss_model = 0.0
+
+        # Sanity check for options.
+        if self.use_truncation and not heavy_ball:
+            print("Using truncated models without heavy ball momentum. Does this make any sense?")
+
+    def step(self, closure=None, loss=None):
         """Perform a single optimization step.
             Args:
             closure (Callable, optional): A closure that reevaluates the model
                 and returns the loss.
+            loss (torch.Tensor, optional): Tensor holding the loss of the current iteration.
         """
-        
-        loss = None
+
+        if self.use_truncation:
+            assert (closure is not None) or (loss is not None), "Either loss tensor or closure must be passed."
+            assert (closure is None) or (loss is None), "Pass either the loss tensor or the closure, not both."
+
         if closure is not None:
-                with torch.enable_grad():
-                        loss = closure()
-                        
+            with torch.enable_grad():
+                loss = closure()
+
         for group in self.param_groups:
             ############################
             #           Muon           #
@@ -181,10 +199,13 @@ class Muon(torch.optim.Optimizer):
             lr = group["lr"]
             wd = group["wd"]
             momentum = group["momentum"]
+            heavy_ball = group["heavy_ball"]
+            nesterov = group["nesterov"]
             lmo = group["lmo"]
             l2_prod_norm = group["l2_prod_norm"]
             nuc_approx = group["nuc_approx"]
             rms_layer_norm = group["rms_layer_norm"]
+            truncate_model = group["truncate_model"]
 
             # initial pass over parameters to compute update direction and LR scalings.
             # Warning for the future: if we ever use more than one param group, these
@@ -192,6 +213,10 @@ class Muon(torch.optim.Optimizer):
             # factors that depend on all layers of the network, so we assume that all
             # layers of the network are inside the current param group.
             layer_nuc_norms = None
+            need_nuc_norms = (not lmo) or l2_prod_norm or self.use_truncation
+            momentum_coeff = 1.0 - momentum if heavy_ball else 1.0
+            current_loss_model = 0.0
+            new_loss_model = 0.0
             for i, p in enumerate(params):
 
                 # sanity check
@@ -206,19 +231,24 @@ class Muon(torch.optim.Optimizer):
                 if "momentum_buffer" not in state:
                     state["momentum_buffer"] = torch.zeros_like(g)
                 buf = state["momentum_buffer"]
-                buf.mul_(momentum).add_(g)
+                buf.mul_(momentum).add_(g, alpha=momentum_coeff)
+
+                # Compute inner product term of running average for truncated model.
+                if self.use_truncation:
+                    current_loss_model += torch.sum(torch.mul(p.data, p.grad.data))
+                    new_loss_model += torch.sum(torch.mul(p.data, buf.data))
 
                 # quit now if update doesn't depend on nuclear norm of layer gradients.
-                if lmo and not l2_prod_norm:
+                if layer_nuc_norms is None:
+                    layer_nuc_norms = torch.zeros(len(params), device=p.device)
+                if not need_nuc_norms:
                     continue
 
                 # Compute (or approximate) nuclear norms of each layer's gradient.
-                if layer_nuc_norms is None:
-                    layer_nuc_norms = torch.zeros(len(params), device=p.device)
                 if nuc_approx is None or (nuc_approx == "past" and "past_nuc" not in state):
 
                     # calc update.
-                    if group["nesterov"]:
+                    if nesterov:
                         g = g.add(buf, alpha=momentum)
                     else:
                         g = buf
@@ -239,12 +269,18 @@ class Muon(torch.optim.Optimizer):
                     fan_out, fan_in = p.shape[:2]
                     layer_nuc_norms[i] *= math.sqrt(fan_out / fan_in)
 
-            # compute lr scaling factors that depend on all layers. doing this here so
-            # we don't recompute this for every layer unnecessarily.
-            if lmo and l2_prod_norm:
+            # Compute dual norm of gradient, which is used to scale LR.
+            if l2_prod_norm:
                 global_dual_norm = torch.linalg.vector_norm(layer_nuc_norms, ord=2)
-            if not lmo and not l2_prod_norm:
+            else:
                 global_dual_norm = torch.sum(layer_nuc_norms)
+            global_dual_norm = float(global_dual_norm)
+
+            # Update running average for truncated model and compute truncated lr.
+            current_lr = lr
+            if self.use_truncation:
+                self.loss_model = momentum * self.loss_model + momentum_coeff * (loss.item() - current_loss_model.item())
+                current_lr = min((self.loss_model - truncate_model + new_loss_model.item()) / global_dual_norm ** 2, lr)
 
             # apply weight updates
             for i, p in enumerate(params):
@@ -262,7 +298,7 @@ class Muon(torch.optim.Optimizer):
                 # always tweak this later.
                 state = self.state[p]
                 buf = state["momentum_buffer"]
-                if group["nesterov"]:
+                if nesterov:
                     g = g.add(buf, alpha=momentum)
                 else:
                     g = buf
@@ -286,7 +322,7 @@ class Muon(torch.optim.Optimizer):
                     lr_scale = global_dual_norm
                 if not lmo and l2_prod_norm:
                     lr_scale = layer_nuc_norms[i]
-                adjusted_lr = lr_scale * lr
+                adjusted_lr = lr_scale * current_lr
 
                 # apply weight decay
                 p.data.mul_(1 - lr * wd)

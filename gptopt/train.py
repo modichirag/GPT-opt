@@ -13,7 +13,7 @@ def train(train_dataloader, val_dataloader, model, optimizer, training_params, d
     learning_rates = []
     step_times = []  # List to record time spent on optimizer.step()
     optimizer_name = optimizer.__class__.__name__
-    if 'Momo' in optimizer_name:
+    if 'Momo' in optimizer_name or (optimizer_name == "Muon" and optimizer.use_truncation):
         pass_loss = True
     else:
         pass_loss = False

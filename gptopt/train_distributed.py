@@ -43,7 +43,7 @@ def train(train_dataloader, val_dataloader, model, optimizer, training_params, l
     master_process = (rank == 0)
     logger = Logging()
     optimizer_name = optimizer.__class__.__name__
-    if 'Momo' in optimizer_name:
+    if 'Momo' in optimizer_name or (optimizer_name == "Muon" and optimizer.use_truncation):
         pass_loss = True
     else:
         pass_loss = False
