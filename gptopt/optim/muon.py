@@ -168,7 +168,8 @@ class Muon(torch.optim.Optimizer):
 
         self.use_truncation = truncate_model is not None
         if self.use_truncation:
-            self.loss_model = 0.0
+            self.loss_model = None
+        self.step_size_list = list()
 
         # Sanity check for options.
         if self.use_truncation and not heavy_ball:
@@ -229,7 +230,7 @@ class Muon(torch.optim.Optimizer):
                 # calc momentum.
                 state = self.state[p]
                 if "momentum_buffer" not in state:
-                    state["momentum_buffer"] = torch.zeros_like(g)
+                    state["momentum_buffer"] = g.clone()
                 buf = state["momentum_buffer"]
                 buf.mul_(momentum).add_(g, alpha=momentum_coeff)
 
@@ -279,8 +280,12 @@ class Muon(torch.optim.Optimizer):
             # Update running average for truncated model and compute truncated lr.
             current_lr = lr
             if self.use_truncation:
-                self.loss_model = momentum * self.loss_model + momentum_coeff * (loss.item() - current_loss_model.item())
+                loss_model_update = loss.item() - current_loss_model.item()
+                if self.loss_model is None:
+                    self.loss_model = loss_model_update
+                self.loss_model = momentum * self.loss_model + momentum_coeff * loss_model_update
                 current_lr = min((self.loss_model - truncate_model + new_loss_model.item()) / global_dual_norm ** 2, lr)
+            self.step_size_list.append(current_lr)
 
             # apply weight updates
             for i, p in enumerate(params):

@@ -127,12 +127,10 @@ def get_optimizer(opt_config: dict, lr = 1e-3) -> Tuple[torch.optim.Optimizer, d
             nuc_approx = None
         if 'momo' in name:
             truncate_model = opt_config["truncate_model"]
-            heavy_ball = True
-            nesterov = False
         else:
             truncate_model = None
-            heavy_ball = False
-            nesterov = True
+        heavy_ball = True
+        nesterov = False
 
         hyperp = {'lr': lr,
                   'wd': opt_config.get('weight_decay', 0),

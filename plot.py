@@ -134,7 +134,7 @@ def main(config_file=None):
                 'momo-adam': '#00518F',
                 'teacher': 'k',
                 'muon': '#8A2BE2',  # Added a new color for "muon" (blue-violet)
-                'muon-nonlmo': '#FFFF00',
+                'muon-nonlmo': '#EAA221',
                 'muon-nonlmo-fro_approx': '#000000',
                 'muon-nonlmo-nuc_fro': '#000000',
                 'muon-nonlmo-nuc_past': '#808080',
@@ -144,6 +144,8 @@ def main(config_file=None):
                 'muon-nonlmo-rms': '#BE6400',
                 'muon-l2_prod-rms': '#FF00FF',
                 'muon-nonlmo-l2_prod-rms': '#FFD700',
+                'muon-nonlmo-momo': '#61ACE5',
+                'muon-nonlmo-nuc_past-momo': '#00518F',
                 'sign-gd': '#61ACE5',
                 'sign-gd-nonlmo': '#00518F',
     }
@@ -166,6 +168,8 @@ def main(config_file=None):
                     'muon-nonlmo-rms': None,
                     'muon-l2_prod-rms': None,
                     'muon-nonlmo-l2_prod-rms': None,
+                    'muon-nonlmo-momo': None,
+                    'muon-nonlmo-nuc_past-momo': None,
                     'sign-gd': None,
                     'sign-gd-nonlmo': None,
     }
