@@ -120,7 +120,7 @@ def train(train_dataloader, val_dataloader, model, optimizer, training_params, l
                 logger.grad_norms.append(norm.item())
                 for param_group in optimizer.param_groups:
                     logger.learning_rates.append(param_group['lr'])
-                    print(f"Step {step}: Learning rate = {param_group['lr']}")
+                    # print(f"Step {step}: Learning rate = {param_group['lr']}")
                 logger.losses.append(loss_accum.item())
                 if teacher_model is not None:
                     logger.teach_losses.append(teacher_loss_accum.item())

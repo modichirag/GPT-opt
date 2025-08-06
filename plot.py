@@ -46,6 +46,8 @@ def plot_final_loss_vs_lr(outputs, colormap, linestylemap, outfilename, val=Fals
             methods[name] = {'lrs': [], 'losses': []}
         methods[name]['lrs'].append(lr)
         methods[name]['losses'].append(final_loss)
+        if val:
+            print(name," -lr -", lr, " -loss-", final_loss)
     # setting up teacherplot
     for output in outputs:
         name, lr = output['name'].split('-lr-')
