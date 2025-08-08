@@ -6,10 +6,7 @@ from transformers import get_cosine_schedule_with_warmup
 from .momo import Momo
 from .momo_adam import MomoAdam
 from .muon import Muon
-# from .sps import SPS
-# from .adabound import AdaBoundW
-# from .adabelief import AdaBelief
-# from .lion import Lion
+
 
 def get_optimizer(opt_config: dict, lr = 1e-3) -> Tuple[torch.optim.Optimizer, dict]:
     """
@@ -112,35 +109,8 @@ def get_optimizer(opt_config: dict, lr = 1e-3) -> Tuple[torch.optim.Optimizer, d
                   'divide': opt_config.get('divide', True),
                   'use_fstar': True
                   }
-    # elif 'muon' in name:
-    #     opt_obj = Muon
-    #     rms_scaling = 'rms' in name
-    #     nuclear_scaling = 'nuclear' in name
-    #     hyperp = {'lr': lr,
-    #               'wd': opt_config.get('weight_decay', 0),
-    #               'adamw_betas': opt_config.get('betas', (0.95, 0.95)),
-    #               'momentum': opt_config.get('momentum', 0.95),
-    #               'nesterov': True,
-    #               'ns_steps': opt_config.get('ns_steps', 5),
-    #               'rms_scaling': rms_scaling,
-    #               'nuclear_scaling': nuclear_scaling
-    #               }
-
-    elif name == 'muon-newtonschultz':
-        opt_obj = Muon
-        hyperp = {'lr': lr,
-                  'wd': opt_config.get('weight_decay', 0),
-                  'adamw_betas': opt_config.get('betas', (0.95, 0.95)),
-                  'momentum': opt_config.get('momentum', 0.95),
-                  'nesterov': True,
-                  'ns_steps': opt_config.get('ns_steps', 5),
-                  'rms_scaling': opt_config.get('rms_scaling', False),
-                  'nuclear_scaling': opt_config.get('nuclear_scaling', False),
-                  'polar_method': 'NewtonSchultz',
-                  'polar_params': opt_config.get('polar_params', {})
-                  }
-
-    elif name == 'muon-jiacheng':
+  
+    elif name == 'muon-you':
         opt_obj = Muon
         hyperp = {'lr': lr,
                   'wd': opt_config.get('weight_decay', 0),
@@ -153,7 +123,7 @@ def get_optimizer(opt_config: dict, lr = 1e-3) -> Tuple[torch.optim.Optimizer, d
                   'polar_method': 'Jiacheng',
                   'polar_params': opt_config.get('polar_params', {})
                   }
-    elif name == 'muon-keller':
+    elif name == 'muon-jordan':
         opt_obj = Muon
         hyperp = {'lr': lr,
                   'wd': opt_config.get('weight_decay', 0),
@@ -166,32 +136,6 @@ def get_optimizer(opt_config: dict, lr = 1e-3) -> Tuple[torch.optim.Optimizer, d
                   'polar_method': 'Keller',
                   'polar_params': opt_config.get('polar_params', {})
                   }
-    elif name == 'muon-pe':
-        opt_obj = Muon
-        hyperp = {'lr': lr,
-                  'wd': opt_config.get('weight_decay', 0),
-                  'adamw_betas': opt_config.get('betas', (0.95, 0.95)),
-                  'momentum': opt_config.get('momentum', 0.95),
-                  'nesterov': True,
-                  'ns_steps': opt_config.get('ns_steps', 5),
-                  'rms_scaling': opt_config.get('rms_scaling', True),
-                  'nuclear_scaling': opt_config.get('nuclear_scaling', False),
-                  'polar_method': 'PolarExpress',
-                  'polar_params': opt_config.get('polar_params', {})
-                  }
-    elif name == 'muon-compact':
-        opt_obj = Muon
-        hyperp = {'lr': lr,
-                  'wd': opt_config.get('weight_decay', 0),
-                  'adamw_betas': opt_config.get('betas', (0.95, 0.95)),
-                  'momentum': opt_config.get('momentum', 0.95),
-                  'nesterov': True,
-                  'ns_steps': opt_config.get('ns_steps', 5),
-                  'rms_scaling': opt_config.get('rms_scaling', True),
-                  'nuclear_scaling': opt_config.get('nuclear_scaling', False),
-                  'polar_method': 'ours_compact',
-                  'polar_params': opt_config.get('polar_params', {})
-                  } 
     elif name == 'muon-polarexpress':
         opt_obj = Muon
         hyperp = {'lr': lr,
@@ -204,19 +148,7 @@ def get_optimizer(opt_config: dict, lr = 1e-3) -> Tuple[torch.optim.Optimizer, d
                   'polar_method': 'polarexpress',
                   'polar_params': opt_config.get('polar_params', {})
                   }        
-    elif name == 'muon*':
-        opt_obj = Muon
-        hyperp = {'lr': lr,
-                  'wd': opt_config.get('weight_decay', 0),
-                  'adamw_betas': opt_config.get('betas', (0.95, 0.95)),
-                  'momentum': opt_config.get('momentum', 0.95),
-                  'nesterov': True,
-                  'ns_steps': opt_config.get('ns_steps', 5),
-                  'rms_scaling': opt_config.get('rms_scaling', True),
-                  'nuclear_scaling': opt_config.get('nuclear_scaling', False),
-                  'polar_method': 'Pole',
-                  'polar_params': opt_config.get('polar_params', {})
-                  }
+
     else:
         raise KeyError(f"Unknown optimizer name {name}.")
         

@@ -3,7 +3,7 @@ import argparse
 import matplotlib.pyplot as plt
 from matplotlib.ticker import ScalarFormatter
 from gptopt.utils import get_default_config, load_config
-from gptopt.plot_utils import get_alpha_from_lr, percentage_of_epoch, plot_data, plot_step_size_and_lr, smoothen_dict
+from gptopt.plot_utils import get_alpha_from_lr, plot_data, plot_step_size_and_lr, smoothen_dict
 import copy
 import json
 import os
@@ -80,47 +80,25 @@ def main(config_file=None):
     for output in outputs:  # Smoothing
         smoothen_dict(output, num_points=100, beta =0.05)
 
-# Pastel Scheme
-# adam: #FFB3BA (Soft Red)
-# muon-polexp: #B3CDE3 (Light Blue)
-# muon-jiacheng: #C3B1E1 (Lavender)
-# muon-keller: #B3E2CD (Mint Green)
-# 6. Cool Tones Scheme
-# adam: #61ACE5 (Sky Blue)
-# muon-polexp: #00518F (Navy Blue)
-# muon-jiacheng: #8A2BE2 (Purple)
-# muon-keller: #008080 (Teal)
-# 4. Nature-Inspired Scheme
-# adam: #FFB400 (Golden Yellow - Sun)
-# muon-polexp: #00518F (Ocean Blue - Water)
-# muon-jiacheng: #8A2BE2 (Purple - Flowers)
-# muon-keller: #228B22 (Forest Green - Trees)
+
     colormap = {'sgd-m': '#B3CBB9',
                 'sgd-sch': '#B3CBB9',
                 'adam': '#00518F',
                 'adamw': '#00518F',  # Oragne'#FF6B35',
                 'adam-sch': '#FF6B35',
                 'momo': '#61ACE5',
-                'muon-PolarExp': 'k',
                 'muon-polarexpress': 'k',
-                'muon-pe': 'k',  # #B3CBB9, darkish blue
                 'muon-You': '#8A2BE2',  # Added a new color for "muon" (blue-violet)
-                'muon*': '#228B22',
-                'muon-Newtonschultz': '#008000',
                 'muon-Jordan': '#FF0000',
     }
     linestylemap = {'momo': None,
                     'sgd-m': None,
                     'sgd-sch': '--',
-                    'muon-pe': '--',
-                    'muon-PolarExp': None,
                     'muon-polarexpress': None,
                     'adam': None,
                     'adamw': None,
                     'adam-sch': '--',
                     'muon-You': ':',
-                    'muon*': None,
-                    'muon-Newtonschultz': None,
                     'muon-Jordan': '-.',
     }
 
@@ -128,18 +106,6 @@ def main(config_file=None):
     lr_ranges = {}
     for output in outputs:
         name, lr = output['name'].split('-lr-')
-        if 'muon*' in name:
-            name = 'muon*'
-            output['name'] = 'muon*' + '-lr-' + lr  # Update the name to 'muon*'
-        elif 'muon-compact' in name:
-            name = 'muon-PolarExp'
-            output['name'] = name + '-lr-' + lr
-        elif 'muon-keller' in name:
-            name = 'muon-Jordan'
-            output['name'] = name + '-lr-' + lr
-        elif 'muon-jiacheng' in name:
-            name = 'muon-You'
-            output['name'] = name + '-lr-' + lr
         lr = float(lr)
         if name not in lr_ranges:
             lr_ranges[name] = [lr, lr]

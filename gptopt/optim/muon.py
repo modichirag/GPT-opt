@@ -6,12 +6,9 @@
 import torch
 import math
 import warnings
-from gptopt.optim.polar_express import PolynomialPolarFactorizer
-from gptopt.optim.polar_express import Keller, Pole, Jiacheng, NewtonSchultz,SmartNormalizer, FrobeniusNormalizer
-from gptopt.optim.ours_compact import PolarExpress, ours_compact
+from gptopt.optim.polar_express import PolarExpress
+
 @torch.compile
-
-
 def jiacheng(G, steps):
     """
     Jiacheng optimized polynomials
@@ -44,7 +41,7 @@ def jiacheng(G, steps):
         X = X.T
     return X
 
-
+@torch.compile
 def zeropower_via_newtonschulz5(G, steps):
     """
     Newton-Schulz iteration to compute the zeroth power / orthogonalization of G. We opt to use a
@@ -111,7 +108,7 @@ class Muon(torch.optim.Optimizer):
                  ns_steps=5,
                  rms_scaling=True,
                  nuclear_scaling=False,
-                 polar_method="NewtonSchultz",
+                 polar_method="Keller",
                  polar_params=None,
                  adamw_betas=(0.95, 0.95),
                  adamw_eps=1e-8):
@@ -153,7 +150,7 @@ class Muon(torch.optim.Optimizer):
             self.state[p]["use_muon"] = True
                 
         for p in adamw_params:
-# Do not use Muon for parameters in adamw_params
+            # Do not use Muon for parameters in adamw_params
             self.state[p]["use_muon"] = False
 
         # Instantiate the polar factorization method
@@ -163,36 +160,14 @@ class Muon(torch.optim.Optimizer):
         if polar_params is None:
             polar_params = {}
 
-        if polar_method == "NewtonSchultz":
-            return PolynomialPolarFactorizer(
-                normalizer=SmartNormalizer(**polar_params.get("normalizer_params", {})),
-                polynomial_sign_iteration=NewtonSchultz(),
-                use_fast_apply=polar_params.get("use_fast_apply", True),
-                deflation_eps=polar_params.get("deflation_eps", 0),
-                cast=polar_params.get("cast", None)
-            )
-        elif polar_method == "Keller":
+
+        if polar_method == "Keller":
             return zeropower_via_newtonschulz5  # Use the method directly
         elif polar_method == "Jiacheng":
             return jiacheng
-        elif polar_method == "ours_compact":
-            return lambda G, steps : ours_compact(G , steps,
-                                                deflation_eps=polar_params.get("deflation_eps", 0.01),
-                                                fast_apply_restart = polar_params.get("fast_apply_restart", 1),
-                                                pinpoint_top=polar_params.get("pinpoint_top", True)
-            )
         elif polar_method == "polarexpress":
             return PolarExpress 
 
-        # elif polar_method == "Pole":
-        #     return PolynomialPolarFactorizer(
-        #         normalizer= FrobeniusNormalizer(**polar_params.get("normalizer_params", {})),
-        #         # normalizer=SmartNormalizer(**polar_params.get("normalizer_params", {})),
-        #         polynomial_sign_iteration=Pole(**polar_params.get("polynomial_params", {})),
-        #         use_fast_apply=polar_params.get("use_fast_apply", True),
-        #         deflation_eps=polar_params.get("deflation_eps", 0),
-        #         cast=polar_params.get("cast", None)
-        #     )
         else:
             raise ValueError(f"Unknown polar method: {polar_method}")
 
