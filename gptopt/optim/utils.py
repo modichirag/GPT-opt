@@ -6,6 +6,7 @@ from transformers import get_cosine_schedule_with_warmup
 from .momo import Momo
 from .momo_adam import MomoAdam
 from .muon import Muon
+from .nesgd import NESGD
 from .sign_gd import SignGD
 # from .sps import SPS
 # from .adabound import AdaBoundW
@@ -144,6 +145,26 @@ def get_optimizer(opt_config: dict, lr = 1e-3) -> Tuple[torch.optim.Optimizer, d
                   'nuc_approx': nuc_approx,
                   'rms_layer_norm': rms_layer_norm,
                   'truncate_model': truncate_model,
+                  }
+
+    elif 'nesgd' in name:
+        opt_obj = NESGD
+        lmo = 'lmo' not in name
+        l2_prod_norm = 'l2_prod' in name
+        rms_scaling = 'rms' in name
+        nuc_approx = "past" if "stale" in name else None
+        truncate_loss = opt_config["truncate_loss"] if "momo" in name else None
+
+        hyperp = {'lr': lr,
+                  'wd': opt_config.get('weight_decay', 0),
+                  'momentum': opt_config.get('momentum', 0.95),
+                  'nesterov': False,
+                  'ns_steps': opt_config.get('ns_steps', 5),
+                  'lmo': lmo,
+                  'l2_prod_norm': l2_prod_norm,
+                  'nuc_approx': nuc_approx,
+                  'rms_scaling': rms_scaling,
+                  'truncate_loss': truncate_loss,
                   }
 
     elif name == 'sign-gd':
