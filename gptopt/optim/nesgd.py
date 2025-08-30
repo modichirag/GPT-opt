@@ -4,7 +4,7 @@ import math
 from .polar import PolarExpress
 
 
-norm_options = ["spectral", "infty"]
+norm_options = ["spectral", "linfty"]
 
 
 class NESGD(torch.optim.Optimizer):
@@ -32,6 +32,9 @@ class NESGD(torch.optim.Optimizer):
         instead of the max norm, which scales each layer's LR by the nuclear norm of the
         gradient.
         nuc_approx: How to approximate the gradient nuclear norm. Choices: [None, 'fro', 'past']
+        linfty_scale: Coefficient for norm of layers with "linfty" norm. Will scale the
+        learning rate of these layers by `1/linfty_scale` for LMO and
+        `1/linfty_scale**2` for GD.
         rms_scaling: Whether to use the RMS norm the input/output space of each
         layer, which scale each layer's LR by sqrt(fan_out/fan_in).
         truncate_loss: Lower bound of loss, if using a truncated model.
@@ -47,6 +50,7 @@ class NESGD(torch.optim.Optimizer):
         lmo=False,
         l2_prod_norm=False,
         nuc_approx=None,
+        linfty_scale=1.0,
         rms_scaling=False,
         truncate_loss=None,
     ):
@@ -60,6 +64,7 @@ class NESGD(torch.optim.Optimizer):
             lmo=lmo,
             l2_prod_norm=l2_prod_norm,
             nuc_approx=nuc_approx,
+            linfty_scale=linfty_scale,
             rms_scaling=rms_scaling,
             truncate_loss=truncate_loss,
         )
@@ -71,7 +76,7 @@ class NESGD(torch.optim.Optimizer):
                 assert p.ndim == 2 # sanity check that we aren't applying Muon for any parameters with more than 2 axes
                 current_norm = "spectral"
             else:
-                current_norm = "infty"
+                current_norm = "linfty"
             sorted_params[current_norm].append(p)
 
         # Register all parameters.
@@ -117,6 +122,7 @@ class NESGD(torch.optim.Optimizer):
             lmo = group["lmo"]
             l2_prod_norm = group["l2_prod_norm"]
             nuc_approx = group["nuc_approx"]
+            linfty_scale = group["linfty_scale"]
             rms_scaling = group["rms_scaling"]
             truncate_loss = group["truncate_loss"]
 
@@ -155,14 +161,10 @@ class NESGD(torch.optim.Optimizer):
                     continue
 
                 # Compute dual norm of layer gradient.
-                if state["norm"] == "infty":
-                    layer_dual_norms[i] = torch.sum(torch.abs(g))
+                if state["norm"] == "linfty":
+                    layer_dual_norms[i] = torch.sum(torch.abs(g)) / linfty_scale
 
                 elif state["norm"] == "spectral":
-
-                    # temp: remove this after things are running
-                    if g.ndim > 2:
-                        assert False
 
                     # Compute or approximate nuclear norm of layer gradient.
                     if nuc_approx is None or (nuc_approx == "past" and "past_nuc" not in state):
@@ -229,14 +231,10 @@ class NESGD(torch.optim.Optimizer):
                     g = buf
 
                 # Compute update direction.
-                if state["norm"] == "infty":
-                    u = torch.sign(g)
+                if state["norm"] == "linfty":
+                    u = torch.sign(g) / linfty_scale
 
                 elif state["norm"] == "spectral":
-
-                    # temp: remove this after things are running
-                    if g.ndim > 2:
-                        assert False
 
                     u = PolarExpress(g, steps=group["ns_steps"])
 

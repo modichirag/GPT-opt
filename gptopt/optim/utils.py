@@ -163,6 +163,7 @@ def get_optimizer(opt_config: dict, lr = 1e-3) -> Tuple[torch.optim.Optimizer, d
                   'lmo': lmo,
                   'l2_prod_norm': l2_prod_norm,
                   'nuc_approx': nuc_approx,
+                  'linfty_scale': opt_config.get('linfty_scale', 1.0),
                   'rms_scaling': rms_scaling,
                   'truncate_loss': truncate_loss,
                   }
