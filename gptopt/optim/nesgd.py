@@ -4,7 +4,7 @@ import math
 from .polar import PolarExpress
 
 
-norm_options = ["spectral", "linfty"]
+norm_options = ["spectral", "linfty", "adam_infty"]
 
 
 class NESGD(torch.optim.Optimizer):
@@ -23,7 +23,6 @@ class NESGD(torch.optim.Optimizer):
         lr: The learning rate. (0.02 is a good default)
         wd: Weight decay.
         momentum: The momentum used for gradient accumulation. (0.95 is a good default)
-        nesterov: Whether to use Nesterov-style momentum in the internal SGD. (recommended)
         ns_steps: The number of Newton-Schulz iterations to run. (6 is probably always enough)
         lmo: Whether to use LMO instead of variational viewpoint of gradient descent to
         derive update rule. If lmo=False, update is additionally scaled by the dual norm
@@ -35,6 +34,10 @@ class NESGD(torch.optim.Optimizer):
         linfty_scale: Coefficient for norm of layers with "linfty" norm. Will scale the
         learning rate of these layers by `1/linfty_scale` for LMO and
         `1/linfty_scale**2` for GD.
+        embed_norm: Which norm to use on embedding layer parameters. Choices: ["linfty",
+        "adam_infty"]. Note that "adam_infty" will essentially induce Adam when
+        lmo=True, and an unnormalized version of Adam when lmo=False.
+        adamw_betas:
         rms_scaling: Whether to use the RMS norm the input/output space of each
         layer, which scale each layer's LR by sqrt(fan_out/fan_in).
         truncate_loss: Lower bound of loss, if using a truncated model.
@@ -45,26 +48,32 @@ class NESGD(torch.optim.Optimizer):
         lr=1e-3,
         wd=0.1,
         momentum=0.95,
-        nesterov=False,
         ns_steps=5,
         lmo=False,
         l2_prod_norm=False,
         nuc_approx=None,
         linfty_scale=1.0,
+        embed_norm="linfty",
+        adamw_betas=(0.95, 0.95),
+        adamw_eps=1e-8,
         rms_scaling=False,
         truncate_loss=None,
     ):
+
+        assert embed_norm in ["linfty", "adam_infty"]
 
         defaults = dict(
             lr=lr,
             wd=wd,
             momentum=momentum,
-            nesterov=nesterov,
             ns_steps=ns_steps,
             lmo=lmo,
             l2_prod_norm=l2_prod_norm,
             nuc_approx=nuc_approx,
             linfty_scale=linfty_scale,
+            embed_norm=embed_norm,
+            adamw_betas=adamw_betas,
+            adamw_eps=adamw_eps,
             rms_scaling=rms_scaling,
             truncate_loss=truncate_loss,
         )
@@ -76,7 +85,7 @@ class NESGD(torch.optim.Optimizer):
                 assert p.ndim == 2 # sanity check that we aren't applying Muon for any parameters with more than 2 axes
                 current_norm = "spectral"
             else:
-                current_norm = "linfty"
+                current_norm = embed_norm
             sorted_params[current_norm].append(p)
 
         # Register all parameters.
@@ -113,74 +122,92 @@ class NESGD(torch.optim.Optimizer):
             with torch.enable_grad():
                 loss = closure()
 
+        # Warning for the future: if we ever use more than one param group, the LR
+        # scalings are not going to behave exactly right. Inside the following loop we
+        # compute scaling factors that depend on all layers of the network, so we assume
+        # that all layers of the network are inside the current param group.
+        assert len(self.param_groups) == 1
+
         for group in self.param_groups:
 
             lr = group["lr"]
             wd = group["wd"]
             momentum = group["momentum"]
-            nesterov = group["nesterov"]
             lmo = group["lmo"]
             l2_prod_norm = group["l2_prod_norm"]
             nuc_approx = group["nuc_approx"]
             linfty_scale = group["linfty_scale"]
+            beta1, beta2 = group["adamw_betas"]
+            eps = group["adamw_eps"]
             rms_scaling = group["rms_scaling"]
             truncate_loss = group["truncate_loss"]
 
-            # initial pass over parameters to compute momentum and dual norm of
-            # parameter gradients, which are used to scale the learning rate.
-            # Warning for the future: if we ever use more than one param group, these
-            # scalings are not going to behave exactly right. Here we compute scaling
-            # factors that depend on all layers of the network, so we assume that all
-            # layers of the network are inside the current param group.
-            layer_dual_norms = None
-            need_dual_norms = (not lmo) or l2_prod_norm or self.use_truncation
+            # First pass over parameters: Compute momentum/Adam buffers and model
+            # truncation variables.
             current_loss_model = 0.0
             new_loss_model = 0.0
             for i, p in enumerate(group["params"]):
-
                 g = p.grad
                 if g is None:
                     continue
 
-                # calc momentum.
                 state = self.state[p]
-                if "momentum_buffer" not in state:
-                    state["momentum_buffer"] = g.clone()
-                buf = state["momentum_buffer"]
-                buf.mul_(momentum).add_(g, alpha=1.0-momentum)
+                if state["norm"] == "adam_infty":
+                    if "momentum_buffer" not in state:
+                        state["momentum_buffer"] = g.clone()
+                        state["sq_momentum_buffer"] = g.square()
+                    buf = state["momentum_buffer"]
+                    buf2 = state["sq_momentum_buffer"]
+                    buf.lerp_(g, 1 - beta1)
+                    buf2.lerp_(g.square(), 1 - beta2)
 
-                # Compute inner product term of running average for truncated model.
+                else:
+                    if "momentum_buffer" not in state:
+                        state["momentum_buffer"] = g.clone()
+                    buf = state["momentum_buffer"]
+                    buf.mul_(momentum).add_(g, alpha=1.0-momentum)
+
                 if self.use_truncation:
                     current_loss_model += torch.sum(torch.mul(p.data, p.grad.data))
                     new_loss_model += torch.sum(torch.mul(p.data, buf.data))
+
+            # Second pass over parameters: Compute dual norm of layer gradients, if
+            # needed.
+            layer_dual_norms = None
+            need_dual_norms = (not lmo) or l2_prod_norm or self.use_truncation
+            for i, p in enumerate(group["params"]):
+                g = p.grad
+                if g is None:
+                    continue
 
                 # quit now if update doesn't depend on dual norm of layer gradients.
                 if layer_dual_norms is None:
                     layer_dual_norms = torch.zeros(len(group["params"]), device=p.device)
                 if not need_dual_norms:
-                    continue
+                    break
+
+                state = self.state[p]
+                pre_lmo = state["momentum_buffer"]
 
                 # Compute dual norm of layer gradient.
                 if state["norm"] == "linfty":
-                    layer_dual_norms[i] = torch.sum(torch.abs(g)) / linfty_scale
+                    layer_dual_norms[i] = torch.sum(torch.abs(pre_lmo)) / linfty_scale
+
+                elif state["norm"] == "adam_infty":
+                    buf1 = state["momentum_buffer"]
+                    buf2 = state["sq_momentum_buffer"]
+                    layer_dual_norms[i] = torch.sum(torch.abs(buf1 / (eps + buf2.sqrt()) * pre_lmo))
 
                 elif state["norm"] == "spectral":
 
                     # Compute or approximate nuclear norm of layer gradient.
                     if nuc_approx is None or (nuc_approx == "past" and "past_nuc" not in state):
-
-                        # calc update.
-                        if nesterov:
-                            g = g.add(buf, alpha=momentum)
-                        else:
-                            g = buf
-                        u = PolarExpress(g, steps=group["ns_steps"])
-
                         # If G = UDV^T, then nuc(G) = tr(G @ UV^T).
-                        layer_dual_norms[i] = torch.trace(g.bfloat16().T @ u)
+                        u = PolarExpress(pre_lmo, steps=group["ns_steps"])
+                        layer_dual_norms[i] = torch.trace(pre_lmo.bfloat16().T @ u)
 
                     elif nuc_approx == "fro":
-                        layer_dual_norms[i] = torch.linalg.matrix_norm(g, ord="fro")
+                        layer_dual_norms[i] = torch.linalg.matrix_norm(pre_lmo, ord="fro")
                     elif nuc_approx == "past":
                         layer_dual_norms[i] = state["past_nuc"]
                     else:
@@ -212,37 +239,31 @@ class NESGD(torch.optim.Optimizer):
                 current_lr = min((self.loss_model - truncate_loss + new_loss_model.item()) / global_dual_norm ** 2, lr)
             self.step_size_list.append(current_lr)
 
-            # apply weight updates
+            # Third pass over parameters: apply weight updates.
             for i, p in enumerate(group["params"]):
-
                 g = p.grad
                 if g is None:
                     continue
 
-                # Calc update. Note that we already computed and stored the momentum
-                # term before, but we are re-computing the matrix sign. This is
-                # suboptimal w.r.t.  time but doesn't use any extra memory. We can
-                # always tweak this later.
                 state = self.state[p]
-                buf = state["momentum_buffer"]
-                if nesterov:
-                    g = g.add(buf, alpha=momentum)
-                else:
-                    g = buf
+                pre_lmo = state["momentum_buffer"]
 
                 # Compute update direction.
                 if state["norm"] == "linfty":
-                    u = torch.sign(g) / linfty_scale
+                    post_lmo = torch.sign(pre_lmo) / linfty_scale
+
+                elif state["norm"] == "adam_infty":
+                    post_lmo = pre_lmo / (eps + state["sq_momentum_buffer"].sqrt())
 
                 elif state["norm"] == "spectral":
 
-                    u = PolarExpress(g, steps=group["ns_steps"])
+                    post_lmo = PolarExpress(pre_lmo, steps=group["ns_steps"])
 
-                    # Compute and store nuclear norm of u if necessary.
+                    # Compute and store nuclear norm of pre_lmo if necessary.
                     if nuc_approx == "past":
                         if "past_nuc" not in state:
                             state["past_nuc"] = torch.zeros(1, device=p.device)
-                        state["past_nuc"] = torch.trace(g.bfloat16().T @ u)
+                        state["past_nuc"] = torch.trace(pre_lmo.bfloat16().T @ post_lmo)
 
                 else:
                     raise NotImplementedError
@@ -265,4 +286,4 @@ class NESGD(torch.optim.Optimizer):
                 p.data.mul_(1 - lr * wd)
 
                 # apply update
-                p.data.add_(u, alpha=-adjusted_lr)
+                p.data.add_(post_lmo, alpha=-adjusted_lr)

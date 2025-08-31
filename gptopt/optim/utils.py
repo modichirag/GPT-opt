@@ -151,19 +151,21 @@ def get_optimizer(opt_config: dict, lr = 1e-3) -> Tuple[torch.optim.Optimizer, d
         opt_obj = NESGD
         lmo = 'lmo' not in name
         l2_prod_norm = 'l2_prod' in name
-        rms_scaling = 'rms' in name
         nuc_approx = "past" if "stale" in name else None
+        embed_norm = 'adam_infty' if 'adam_infty' in name else 'linfty'
+        rms_scaling = 'rms' in name
         truncate_loss = opt_config["truncate_loss"] if "momo" in name else None
 
         hyperp = {'lr': lr,
                   'wd': opt_config.get('weight_decay', 0),
                   'momentum': opt_config.get('momentum', 0.95),
-                  'nesterov': False,
                   'ns_steps': opt_config.get('ns_steps', 5),
                   'lmo': lmo,
                   'l2_prod_norm': l2_prod_norm,
                   'nuc_approx': nuc_approx,
                   'linfty_scale': opt_config.get('linfty_scale', 1.0),
+                  'embed_norm': embed_norm,
+                  'adamw_betas': opt_config.get('betas', (0.95, 0.95)),
                   'rms_scaling': rms_scaling,
                   'truncate_loss': truncate_loss,
                   }
