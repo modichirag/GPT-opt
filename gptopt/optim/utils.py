@@ -150,14 +150,17 @@ def get_optimizer(opt_config: dict, lr = 1e-3) -> Tuple[torch.optim.Optimizer, d
     elif 'nesgd' in name:
         opt_obj = NESGD
         lmo = 'lmo' in name
-        l2_prod_norm = 'l2_prod' in name
+        if "l2_prod" in name or "hybrid_prod" in name:
+            assert not ("l2_prod" in name and "hybrid_prod" in name)
+            prod_norm = "l2" if "l2_prod" in name else "hybrid"
+        else:
+            prod_norm = "linfty"
         nuc_approx = "past" if "stale" in name else None
         if "adam_infty" in name or "adam_2" in name:
             assert not ("adam_infty" in name and "adam_2" in name)
             embed_norm = "adam_infty" if "adam_infty" in name else "adam_2"
         else:
             embed_norm = "linfty"
-        rms_scaling = 'rms' in name
         truncate_loss = opt_config["truncate_loss"] if "momo" in name else None
 
         hyperp = {'lr': lr,
@@ -165,12 +168,11 @@ def get_optimizer(opt_config: dict, lr = 1e-3) -> Tuple[torch.optim.Optimizer, d
                   'momentum': opt_config.get('momentum', 0.95),
                   'ns_steps': opt_config.get('ns_steps', 5),
                   'lmo': lmo,
-                  'l2_prod_norm': l2_prod_norm,
+                  'prod_norm': prod_norm,
                   'nuc_approx': nuc_approx,
                   'linfty_scale': opt_config.get('linfty_scale', 1.0),
                   'embed_norm': embed_norm,
                   'adamw_betas': opt_config.get('betas', (0.95, 0.95)),
-                  'rms_scaling': rms_scaling,
                   'truncate_loss': truncate_loss,
                   }
 

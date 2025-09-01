@@ -27,9 +27,11 @@ class NESGD(torch.optim.Optimizer):
         lmo: Whether to use LMO instead of variational viewpoint of gradient descent to
         derive update rule. If lmo=False, update is additionally scaled by the dual norm
         of the gradient.
-        l2_prod_norm: Whether to use the L2 norm for the product space over layers
+        prod_norm: Which product norm to use. Choices ["linfty", "l2", "hybrid"].
         instead of the max norm, which scales each layer's LR by the nuclear norm of the
-        gradient.
+        gradient. "hybrid" applies the linfty norm to the product of all muon layers,
+        the l2 norm to the product of all non-muon layers, then takes the l2 norm of the
+        resulting two-coordinate vector.
         nuc_approx: How to approximate the gradient nuclear norm. Choices: [None, 'fro', 'past']
         linfty_scale: Coefficient for norm of layers with "linfty" norm. Will scale the
         learning rate of these layers by `1/linfty_scale` for LMO and
@@ -39,7 +41,6 @@ class NESGD(torch.optim.Optimizer):
         lmo=True, and an unnormalized version of Adam when lmo=False, while "adam_2"
         will induce Adam when lmo=False, and a normalized version of Adam when lmo=True.
         adamw_betas:
-        rms_scaling: Whether to use the RMS norm the input/output space of each
         layer, which scale each layer's LR by sqrt(fan_out/fan_in).
         truncate_loss: Lower bound of loss, if using a truncated model.
     """
@@ -51,16 +52,16 @@ class NESGD(torch.optim.Optimizer):
         momentum=0.95,
         ns_steps=5,
         lmo=False,
-        l2_prod_norm=False,
+        prod_norm="linfty",
         nuc_approx=None,
         linfty_scale=1.0,
         embed_norm="linfty",
         adamw_betas=(0.95, 0.95),
         adamw_eps=1e-8,
-        rms_scaling=False,
         truncate_loss=None,
     ):
 
+        assert prod_norm in ["linfty", "l2", "hybrid"]
         assert embed_norm in ["linfty", "adam_infty", "adam_2"]
 
         defaults = dict(
@@ -69,13 +70,12 @@ class NESGD(torch.optim.Optimizer):
             momentum=momentum,
             ns_steps=ns_steps,
             lmo=lmo,
-            l2_prod_norm=l2_prod_norm,
+            prod_norm=prod_norm,
             nuc_approx=nuc_approx,
             linfty_scale=linfty_scale,
             embed_norm=embed_norm,
             adamw_betas=adamw_betas,
             adamw_eps=adamw_eps,
-            rms_scaling=rms_scaling,
             truncate_loss=truncate_loss,
         )
 
@@ -88,6 +88,7 @@ class NESGD(torch.optim.Optimizer):
             else:
                 current_norm = embed_norm
             sorted_params[current_norm].append(p)
+        self.embed_norm = embed_norm
 
         # Register all parameters.
         params = []
@@ -135,12 +136,11 @@ class NESGD(torch.optim.Optimizer):
             wd = group["wd"]
             momentum = group["momentum"]
             lmo = group["lmo"]
-            l2_prod_norm = group["l2_prod_norm"]
+            prod_norm = group["prod_norm"]
             nuc_approx = group["nuc_approx"]
             linfty_scale = group["linfty_scale"]
             beta1, beta2 = group["adamw_betas"]
             eps = group["adamw_eps"]
-            rms_scaling = group["rms_scaling"]
             truncate_loss = group["truncate_loss"]
 
             # First pass over parameters: Compute momentum/Adam buffers and model
@@ -174,35 +174,34 @@ class NESGD(torch.optim.Optimizer):
 
             # Second pass over parameters: Compute dual norm of layer gradients, if
             # needed.
-            layer_dual_norms = None
-            need_dual_norms = (not lmo) or l2_prod_norm or self.use_truncation
+            need_dual_norms = not (lmo and prod_norm == "linfty") or self.use_truncation
             for i, p in enumerate(group["params"]):
                 g = p.grad
                 if g is None:
                     continue
 
+                state = self.state[p]
+                if "layer_dual_norm" not in state:
+                    state["layer_dual_norm"] = torch.zeros(1, device=p.device)
+
                 # quit now if update doesn't depend on dual norm of layer gradients.
-                if layer_dual_norms is None:
-                    layer_dual_norms = torch.zeros(len(group["params"]), device=p.device)
                 if not need_dual_norms:
                     break
 
-                state = self.state[p]
-                pre_lmo = state["momentum_buffer"]
-
                 # Compute dual norm of layer gradient.
+                pre_lmo = state["momentum_buffer"]
                 if state["norm"] == "linfty":
-                    layer_dual_norms[i] = torch.sum(torch.abs(pre_lmo)) / linfty_scale
+                    state["layer_dual_norm"] = torch.sum(torch.abs(pre_lmo)) / linfty_scale
 
                 elif state["norm"] == "adam_infty":
                     buf1 = state["momentum_buffer"]
                     buf2 = state["sq_momentum_buffer"]
-                    layer_dual_norms[i] = torch.sum(torch.abs(buf1 / (eps + buf2.sqrt()) * pre_lmo))
+                    state["layer_dual_norm"] = torch.sum(torch.abs(buf1 / (eps + buf2.sqrt()) * pre_lmo))
 
                 elif state["norm"] == "adam_2":
                     buf1 = state["momentum_buffer"]
                     buf2 = state["sq_momentum_buffer"]
-                    layer_dual_norms[i] = torch.linalg.vector_norm(buf1 / (eps + buf2.sqrt()).sqrt())
+                    state["layer_dual_norm"] = torch.linalg.vector_norm(buf1 / (eps + buf2.sqrt()).sqrt())
 
                 elif state["norm"] == "spectral":
 
@@ -210,30 +209,49 @@ class NESGD(torch.optim.Optimizer):
                     if nuc_approx is None or (nuc_approx == "past" and "past_nuc" not in state):
                         # If G = UDV^T, then nuc(G) = tr(G @ UV^T).
                         u = PolarExpress(pre_lmo, steps=group["ns_steps"])
-                        layer_dual_norms[i] = torch.trace(pre_lmo.bfloat16().T @ u)
+                        state["layer_dual_norm"] = torch.trace(pre_lmo.bfloat16().T @ u)
 
                     elif nuc_approx == "fro":
-                        layer_dual_norms[i] = torch.linalg.matrix_norm(pre_lmo, ord="fro")
+                        state["layer_dual_norm"] = torch.linalg.matrix_norm(pre_lmo, ord="fro")
                     elif nuc_approx == "past":
-                        layer_dual_norms[i] = state["past_nuc"]
+                        state["layer_dual_norm"] = state["past_nuc"]
                     else:
                         raise NotImplementedError
-
-                    # Apply RMS scaling to nuclear norms.
-                    if rms_scaling:
-                        fan_out, fan_in = p.shape[:2]
-                        layer_dual_norms[i] *= math.sqrt(fan_out / fan_in)
 
                 else:
                     raise NotImplementedError
 
-            # Compute dual norm of gradient, which is used to scale LR.
+            # Compute dual norm of each layer's gradient, which is used to scale LR.
             global_dual_norm = None
             if need_dual_norms:
-                if l2_prod_norm:
+                if prod_norm == "linfty":
+                    layer_dual_norms = torch.stack([
+                        self.state[p]["layer_dual_norm"] for p in group["params"]
+                        if p.grad is not None
+                    ])
+                    global_dual_norm = torch.linalg.vector_norm(layer_dual_norms, ord=1)
+                elif prod_norm == "l2":
+                    layer_dual_norms = torch.stack([
+                        self.state[p]["layer_dual_norm"] for p in group["params"]
+                        if p.grad is not None
+                    ])
                     global_dual_norm = torch.linalg.vector_norm(layer_dual_norms, ord=2)
+                elif prod_norm == "hybrid":
+                    muon_dual_norms = torch.stack([
+                        self.state[p]["layer_dual_norm"] for p in group["params"]
+                        if p.grad is not None and self.state[p]["norm"] == "spectral"
+                    ])
+                    muon_dual_norm = torch.max(muon_dual_norms)
+
+                    other_dual_norms = torch.stack([
+                        self.state[p]["layer_dual_norm"] for p in group["params"]
+                        if p.grad is not None and self.state[p]["norm"] == self.embed_norm
+                    ])
+                    other_dual_norm = torch.linalg.vector_norm(other_dual_norms, ord=2)
+
+                    global_dual_norm = (muon_dual_norm.square() + other_dual_norm.square()).sqrt()
                 else:
-                    global_dual_norm = torch.sum(layer_dual_norms)
+                    raise NotImplementedError
 
             # Update running average for truncated model and compute truncated lr.
             current_lr = lr
@@ -278,18 +296,22 @@ class NESGD(torch.optim.Optimizer):
                 else:
                     raise NotImplementedError
 
-                # Apply scaling factors to lr depending on steepest descent variations
-                lr_scale = 1.0
-                if lmo and not l2_prod_norm:
-                    if rms_scaling:
-                        fan_out, fan_in = p.shape[:2]
-                        lr_scale = math.sqrt(fan_out / fan_in)
-                if lmo and l2_prod_norm:
-                    lr_scale = layer_dual_norms[i] / global_dual_norm
-                if not lmo and not l2_prod_norm:
-                    lr_scale = global_dual_norm
-                if not lmo and l2_prod_norm:
-                    lr_scale = layer_dual_norms[i]
+                # Apply scaling factors to lr depending on product norm and LMO vs GD.
+                if prod_norm == "linfty":
+                    lr_scale = 1
+                elif prod_norm == "l2":
+                    lr_scale = state["layer_dual_norm"] / global_dual_norm
+                elif prod_norm == "hybrid":
+                    if state["norm"] == "spectral":
+                        lr_scale = muon_dual_norm / global_dual_norm
+                    else:
+                        lr_scale = state["layer_dual_norm"] / global_dual_norm
+                else:
+                    raise NotImplementedError
+
+                if not lmo:
+                    lr_scale *= global_dual_norm
+
                 adjusted_lr = lr_scale * current_lr
 
                 # apply weight decay
