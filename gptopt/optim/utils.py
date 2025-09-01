@@ -149,10 +149,14 @@ def get_optimizer(opt_config: dict, lr = 1e-3) -> Tuple[torch.optim.Optimizer, d
 
     elif 'nesgd' in name:
         opt_obj = NESGD
-        lmo = 'lmo' not in name
+        lmo = 'lmo' in name
         l2_prod_norm = 'l2_prod' in name
         nuc_approx = "past" if "stale" in name else None
-        embed_norm = 'adam_infty' if 'adam_infty' in name else 'linfty'
+        if "adam_infty" in name or "adam_2" in name:
+            assert not ("adam_infty" in name and "adam_2" in name)
+            embed_norm = "adam_infty" if "adam_infty" in name else "adam_2"
+        else:
+            embed_norm = "linfty"
         rms_scaling = 'rms' in name
         truncate_loss = opt_config["truncate_loss"] if "momo" in name else None
 

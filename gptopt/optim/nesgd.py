@@ -4,7 +4,7 @@ import math
 from .polar import PolarExpress
 
 
-norm_options = ["spectral", "linfty", "adam_infty"]
+norm_options = ["spectral", "linfty", "adam_infty", "adam_2"]
 
 
 class NESGD(torch.optim.Optimizer):
@@ -35,8 +35,9 @@ class NESGD(torch.optim.Optimizer):
         learning rate of these layers by `1/linfty_scale` for LMO and
         `1/linfty_scale**2` for GD.
         embed_norm: Which norm to use on embedding layer parameters. Choices: ["linfty",
-        "adam_infty"]. Note that "adam_infty" will essentially induce Adam when
-        lmo=True, and an unnormalized version of Adam when lmo=False.
+        "adam_infty", "adam_2"]. Note that "adam_infty" will essentially induce Adam when
+        lmo=True, and an unnormalized version of Adam when lmo=False, while "adam_2"
+        will induce Adam when lmo=False, and a normalized version of Adam when lmo=True.
         adamw_betas:
         rms_scaling: Whether to use the RMS norm the input/output space of each
         layer, which scale each layer's LR by sqrt(fan_out/fan_in).
@@ -60,7 +61,7 @@ class NESGD(torch.optim.Optimizer):
         truncate_loss=None,
     ):
 
-        assert embed_norm in ["linfty", "adam_infty"]
+        assert embed_norm in ["linfty", "adam_infty", "adam_2"]
 
         defaults = dict(
             lr=lr,
@@ -152,7 +153,7 @@ class NESGD(torch.optim.Optimizer):
                     continue
 
                 state = self.state[p]
-                if state["norm"] == "adam_infty":
+                if state["norm"] in ["adam_infty", "adam_2"]:
                     if "momentum_buffer" not in state:
                         state["momentum_buffer"] = g.clone()
                         state["sq_momentum_buffer"] = g.square()
@@ -197,6 +198,11 @@ class NESGD(torch.optim.Optimizer):
                     buf1 = state["momentum_buffer"]
                     buf2 = state["sq_momentum_buffer"]
                     layer_dual_norms[i] = torch.sum(torch.abs(buf1 / (eps + buf2.sqrt()) * pre_lmo))
+
+                elif state["norm"] == "adam_2":
+                    buf1 = state["momentum_buffer"]
+                    buf2 = state["sq_momentum_buffer"]
+                    layer_dual_norms[i] = torch.linalg.vector_norm(buf1 / (eps + buf2.sqrt()).sqrt())
 
                 elif state["norm"] == "spectral":
 
@@ -255,8 +261,12 @@ class NESGD(torch.optim.Optimizer):
                 elif state["norm"] == "adam_infty":
                     post_lmo = pre_lmo / (eps + state["sq_momentum_buffer"].sqrt())
 
-                elif state["norm"] == "spectral":
+                elif state["norm"] == "adam_2":
+                    v = state["sq_momentum_buffer"]
+                    dual_norm = torch.linalg.vector_norm(pre_lmo / (eps + v.sqrt()).sqrt())
+                    post_lmo = pre_lmo / ((eps + v.sqrt()) * dual_norm)
 
+                elif state["norm"] == "spectral":
                     post_lmo = PolarExpress(pre_lmo, steps=group["ns_steps"])
 
                     # Compute and store nuclear norm of pre_lmo if necessary.
