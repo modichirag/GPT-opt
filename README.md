@@ -7,7 +7,7 @@ Small package for testing optimization methods for training GPT models from the 
  ./setup_env.sh
 ```
 
-### Create a virtual environment and activate:
+which will create a virtual environment and activate it:
 ```bash
 python3 -m venv gptopt
 source gptopt/bin/activate

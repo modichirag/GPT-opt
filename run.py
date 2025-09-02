@@ -37,7 +37,7 @@ with open(config_file, 'r') as file:
     config = yaml.safe_load(file)
 #config = load_config(get_default_config(), config_file)
 outputname = config_file.replace("configs/","").replace('.yaml','')
-output_dir = f"gptopt/outputs/{outputname}"
+output_dir = f"{config['logging_params']['results_dir']}/{outputname}"
 CKPT_DIR = config['logging_params']['ckpt_dir']
 ckpt_dir_base = CKPT_DIR + f"/{outputname}/" if CKPT_DIR != "" else ""
 if master_process:
@@ -78,15 +78,7 @@ for opt_config in list_optimizer_params:
         opt_config_copy = copy.deepcopy(opt_config)
         opt_config_copy['lr'] = lr
         config_hash = hash_config(opt_config_copy, training_params, config['gpt_model'])
-        if "muon-compact" in opt_config['name']:
-            polar_params = opt_config['polar_params']   
-            file_name = opt_config['name'] + '-pin-' +str(polar_params['pinpoint_top'])
-            file_name = file_name + '-ns-' +str(opt_config['ns_steps']) 
-            file_name = file_name + '-fa-' +str(polar_params['fast_apply_restart']) 
-            file_name = file_name +'-defl-' +str(polar_params['deflation_eps'])
-            file_name = f"{file_name}-lr-{lr}-{opt_config['lr_schedule']}-{config_hash}-world{world_size}"
-        else:
-            file_name = f"{opt_config['name']}-lr-{lr}-{opt_config['lr_schedule']}-{config_hash}-world{world_size}"
+        file_name = f"{opt_config['name']}-lr-{lr}-{opt_config['lr_schedule']}-{config_hash}-world{world_size}"
         if args.suffix != '': file_name += f"-{args.suffix}"
         output_path = os.path.join(output_dir, file_name + '.json')
         ckpt_dir = os.path.join(ckpt_dir_base, file_name) + '/' if CKPT_DIR != "" else ""

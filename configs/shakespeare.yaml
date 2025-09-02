@@ -1,50 +1,30 @@
 # config.yaml
 optimizer_params:
-  # - name: adamw
-  #   lr: [0.005, 0.01, 0.05]
-  #   # lr: [0.0001, 0.0005, 0.001]
-  #   weight_decay: 0.1
-  #   lr_schedule: warm-up-cosine
-  #   warm_up_fraction: 0.1
+  - name: adamw
+    lr: [0.005, 0.01, 0.05]
+    # lr: [0.0001, 0.0005, 0.001]
+    weight_decay: 0.1
+    lr_schedule: warm-up-cosine
+    warm_up_fraction: 0.1
 
-  # - name: momo-adam
-  #   lr: [0.005, 0.01, 0.05]
-  #   # lr: [0.0001, 0.0005, 0.001]
-  #   weight_decay: 0.1
-  #   lb: 2.5
-  #   lr_schedule: warm-up-cosine
-  #   warm_up_fraction: 0.1
+  - name: muon-you
+    lr: [0.005, 0.01, 0.05]
+    weight_decay: 0.1
+    lr_schedule: warm-up-cosine
+    warm_up_fraction: 0.1
 
-  # - name: muon-jiacheng
-  #   lr: [0.005, 0.01, 0.05]
-  #   weight_decay: 0.1
-  #   lr_schedule: warm-up-cosine
-  #   warm_up_fraction: 0.1
-  #   polar_params:
-  #     normalizer_params: {}
-  #     use_fast_apply: False
-  #     deflation_eps: 0.001
+  - name: muon-jordan
+    lr: [0.005, 0.01, 0.05]
+    weight_decay: 0.1
+    lr_schedule: warm-up-cosine
+    warm_up_fraction: 0.1
 
-  # - name: muon-keller
-  #   lr: [0.005, 0.01, 0.05]
-  #   weight_decay: 0.1
-  #   lr_schedule: warm-up-cosine
-  #   warm_up_fraction: 0.1
-  #   polar_params:
-  #     normalizer_params: {}
-  #     use_fast_apply: False
-  #     deflation_eps: 0.001
-
-  - name: muon-compact
+  - name: muon-polarexpress
     # lr: [ 0.02]
-    lr: [ 0.001, 0.005, 0.01,    0.05]
+    lr: [ 0.001, 0.005, 0.01, 0.05]
     weight_decay: 0.1
     lr_schedule: constant-linear
     warm_up_fraction: 0.4
-    polar_params:
-      deflation_eps: 0.01
-      pinpoint_top: True
-      fast_apply_restart: 3
 
 
 training_params:
@@ -66,8 +46,8 @@ logging_params:
   save_ckpt_step: 500
   load_ckpt_step: 0
   keep_last: 2
-  ckpt_dir: "" #/mnt/ceph/users/cmodi/gptopt/
-  
+  ckpt_dir: "outputs/checkpoints"
+  results_dir: "outputs/results"
 
 gpt_model:
   n_embd: 768    

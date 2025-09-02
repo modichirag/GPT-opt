@@ -51,7 +51,7 @@ def plot_final_loss_vs_lr(outputs, colormap, outfilename, linestylemap,  val=Fal
         sorted_indices = sorted(range(len(data['lrs'])), key=lambda i: data['lrs'][i])  # Sort by learning rate
         sorted_lrs = [data['lrs'][i] for i in sorted_indices]
         sorted_losses = [data['losses'][i] for i in sorted_indices]
-        ax.plot(sorted_lrs, sorted_losses, alpha= 0.85, label=name, color=colormap[name], linestyle=linestylemap[name], linewidth=2)
+        ax.plot(sorted_lrs, sorted_losses, alpha= 0.85, label=name, color=colormap.get(name, None), linestyle=linestylemap.get(name, None), linewidth=2)
     ax.set_xscale('log')
     ax.set_xlabel('Learning Rate')
     if val:
@@ -72,7 +72,7 @@ def main(config_file=None):
     if config_file:
         config = load_config(default_config, config_file)
     outfilename = config_file.replace("configs/", "").replace('.yaml', '')
-    output_dir = f"gptopt/outputs/{outfilename}"
+    output_dir = f"{config['logging_params']['results_dir']}/{outfilename}"
     outputs = load_outputs(output_dir)
 
     print(f"Loaded {len(outputs)} outputs from {output_dir}")
@@ -88,8 +88,8 @@ def main(config_file=None):
                 'adam-sch': '#FF6B35',
                 'momo': '#61ACE5',
                 'muon-polarexpress': 'k',
-                'muon-You': '#8A2BE2',  # Added a new color for "muon" (blue-violet)
-                'muon-Jordan': '#FF0000',
+                'muon-you': '#8A2BE2',  # Added a new color for "muon" (blue-violet)
+                'muon-jordan': '#FF0000',
     }
     linestylemap = {'momo': None,
                     'sgd-m': None,
@@ -98,8 +98,8 @@ def main(config_file=None):
                     'adam': None,
                     'adamw': None,
                     'adam-sch': '--',
-                    'muon-You': ':',
-                    'muon-Jordan': '-.',
+                    'muon-you': ':',
+                    'muon-jordan': '-.',
     }
 
     # Collect learning rate ranges for each method
@@ -129,7 +129,7 @@ def main(config_file=None):
             best_outputs[name] = output
             lr = float(lr)
             best_lr[name] = [lr, lr] 
-    
+    os.makedirs("figures", exist_ok=True)
     for name, output in best_outputs.items():
         print(f"Best {name}-{best_lr[name][0]} final val loss: {output['val_losses'][-1]}")
     # print(f"Best {name} lr: {lr}")
@@ -179,32 +179,32 @@ def main(config_file=None):
     # fig.savefig('figures/' + outfilename + '.pdf', format='pdf', bbox_inches='tight')
 
 
-    # Plot learning rates
-    for method_subset in [['sgd-m', 'sgd-sch', 'momo'], ['adam', 'adam-sch', 'momo-adam']]:
-        fig, ax = plt.subplots(figsize=(4, 3))
-        subset_outputs = [output for output in outputs if output['name'].split('-lr-')[0] in method_subset]
-        plot_data(ax, subset_outputs, config['training_params']['num_epochs'], 'learning_rates', 'Learning rate', colormap, linestylemap, lr_ranges,  get_alpha_from_lr)
-        ax.legend(loc='upper right', fontsize=10)
-        fig.subplots_adjust(top=0.935, bottom=0.03, left=0.155, right=0.99)
-        name = 'figures/lr-' if 'sgd-m' in method_subset else 'figures/lr-adam-'
-        fig.savefig(name + outfilename + '.pdf', format='pdf', bbox_inches='tight')
+    # # Plot learning rates
+    # for method_subset in [['sgd-m', 'sgd-sch', 'momo'], ['adam', 'adam-sch', 'momo-adam']]:
+    #     fig, ax = plt.subplots(figsize=(4, 3))
+    #     subset_outputs = [output for output in outputs if output['name'].split('-lr-')[0] in method_subset]
+    #     plot_data(ax, subset_outputs, config['training_params']['num_epochs'], 'learning_rates', 'Learning rate', colormap, linestylemap, lr_ranges,  get_alpha_from_lr)
+    #     ax.legend(loc='upper right', fontsize=10)
+    #     fig.subplots_adjust(top=0.935, bottom=0.03, left=0.155, right=0.99)
+    #     name = 'figures/lr-' if 'sgd-m' in method_subset else 'figures/lr-adam-'
+    #     fig.savefig(name + outfilename + '.pdf', format='pdf', bbox_inches='tight')
 
-    # Plot step size lists
-    fig, ax = plt.subplots(figsize=(4, 3))
-    plotted_methods = plot_step_size_and_lr(ax, outputs, colormap, linestylemap, lr_ranges, get_alpha_from_lr)
-    handles, labels = ax.get_legend_handles_labels()
-    legend_handles = [copy.copy(handle) for handle in handles]
-    for handle in legend_handles:
-        handle.set_alpha(1.0)
-    ax.legend(legend_handles, labels, loc='upper right', fontsize=10)
-    ax.set_xlabel('Step')
-    ax.set_ylabel('Learning Rate')
-    fig.subplots_adjust(top=0.99, bottom=0.155, left=0.12, right=0.99)
-    fig.savefig('figures/step_size-' + outfilename + '.pdf', format='pdf', bbox_inches='tight')
+    # # Plot step size lists
+    # fig, ax = plt.subplots(figsize=(4, 3))
+    # plotted_methods = plot_step_size_and_lr(ax, outputs, colormap, linestylemap, lr_ranges, get_alpha_from_lr)
+    # handles, labels = ax.get_legend_handles_labels()
+    # legend_handles = [copy.copy(handle) for handle in handles]
+    # for handle in legend_handles:
+    #     handle.set_alpha(1.0)
+    # ax.legend(legend_handles, labels, loc='upper right', fontsize=10)
+    # ax.set_xlabel('Step')
+    # ax.set_ylabel('Learning Rate')
+    # fig.subplots_adjust(top=0.99, bottom=0.155, left=0.12, right=0.99)
+    # fig.savefig('figures/step_size-' + outfilename + '.pdf', format='pdf', bbox_inches='tight')
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description='Plotting gpt_distill outputs.')
-    parser.add_argument('config', type=str, nargs='?', help='Path to config file', default=None)
+    parser.add_argument('--config', type=str, nargs='?', help='Path to config file', default=None)
 
     args = parser.parse_args()
     if args.config:

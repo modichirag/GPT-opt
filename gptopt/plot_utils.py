@@ -38,9 +38,9 @@ def plot_data(ax, outputs, num_epochs, field, ylabel, colormap, linestylemap, lr
         ax.plot(x_values,
                 output[field],
                 label=label,
-                color=colormap[name],
+                color=colormap.get(name),
                 linewidth=2,
-                linestyle=linestylemap[name],
+                linestyle=linestylemap.get(name),
                 alpha=alpha,
                 zorder=zorder)
         plotted_methods.add(name)
