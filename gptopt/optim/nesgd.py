@@ -241,7 +241,7 @@ class NESGD(torch.optim.Optimizer):
                         self.state[p]["layer_dual_norm"] for p in group["params"]
                         if p.grad is not None and self.state[p]["norm"] == "spectral"
                     ])
-                    muon_dual_norm = torch.max(muon_dual_norms)
+                    muon_dual_norm = torch.sum(muon_dual_norms)
 
                     other_dual_norms = torch.stack([
                         self.state[p]["layer_dual_norm"] for p in group["params"]
