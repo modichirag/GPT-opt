@@ -1,8 +1,8 @@
 # GPT-opt
+Small package for testing optimization methods for training GPT models from the Transformers library.
+This codebase is used for running the experiments in our paper, [The Polar Express: Optimal Matrix Sign Methods and Their Application to the Muon Algorithm](https://arxiv.org/abs/2505.16932).
 
-Small package for testing optimization methods for training GPT models from the Transformers library
-
- start, setup up the virtual enviroment and install dependencies by running
+To start, setup up the virtual enviroment and install dependencies by running
 ```bash
  ./setup_env.sh
 ```
@@ -38,5 +38,6 @@ Make sure the virtual environment given in `./submit.sh` is correct.
 squeue --format="%.18i %.9P %.30j %.8u %.8T %.10M %.9l %.6D %R" --me
 ```
 
-# FineWeb Dataset
-Use the configuration `configs/gpt-Large-fine1B.yaml`. These runs will take longer, so we recommend dividing them into separate slurm jobs. E.g., comment out all the methods except one, the `./submit.sh configs/gpt-Large-fine1B.yaml`, observe the slurm log file until training has begun (`Training with optimizer...`), then uncomment the next method and submit again. You may also wish to reduce the `#SBATCH --time` in `submit.sh`.
+# Paper Plots
+Use the configuration `configs/gpt-Large-fine1B.yaml`. This uses the FineWeb dataset, and a larger GPT model.
+These runs will take longer, so we recommend dividing them into separate slurm jobs. E.g., comment out all the methods except one, the `./submit.sh configs/gpt-Large-fine1B.yaml`, observe the slurm log file until training has begun (`Training with optimizer...`), then uncomment the next method and submit again. You may also wish to reduce the `#SBATCH --time` in `submit.sh`.
