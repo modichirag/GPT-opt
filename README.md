@@ -9,10 +9,11 @@ Small package for testing optimization methods for training GPT models from the 
 
 which will create a virtual environment and activate it:
 ```bash
-python3 -m venv gptopt
-source gptopt/bin/activate
+python3 -m venv .venv
+source .venv/bin/activate
 python3 -m pip install -e .
 ```
+Of course, you can name this virtual environment anything you want.
 
 ### Run Example:
 ```bash
@@ -25,13 +26,9 @@ python3 plot.py --config configs/shakespeare.yaml
 ```
 
 # On the cluster
-### srun
-```bash
-srun --gpus=1 --cpus-per-gpu=8 --time=5:00:00 --partition=gpu  --pty bash
-module load python
-```
 
-### Or using Slurm:
+### Submit using slurm
+Make sure the virtual environment given in `./submit.sh` is correct.
 ```bash
 ./submit.sh configs/shakespeare.yaml
 ```
@@ -41,4 +38,5 @@ module load python
 squeue --format="%.18i %.9P %.30j %.8u %.8T %.10M %.9l %.6D %R" --me
 ```
 
-
+# FineWeb Dataset
+Use the configuration `configs/gpt-Large-fine1B.yaml`. These runs will take longer, so we recommend dividing them into separate slurm jobs. E.g., comment out all the methods except one, the `./submit.sh configs/gpt-Large-fine1B.yaml`, observe the slurm log file until training has begun (`Training with optimizer...`), then uncomment the next method and submit again. You may also wish to reduce the `#SBATCH --time` in `submit.sh`.

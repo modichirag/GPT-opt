@@ -1,39 +1,35 @@
 # config.yaml
 optimizer_params:
   - name: adamw
-    lr: [0.00005]
-    # lr: [0.0005, 0.001, 0.005, 0.01,  0.02]
+    # lr: [0.00005]
+    lr: [0.0005, 0.001, 0.005, 0.01,  0.02]
     weight_decay: 0.1
     lr_schedule: constant-linear
     warm_up_fraction: 0.4
 
-  # - name: muon-jiacheng
-  #   lr: [ 0.05]
-  #   # lr: [  0.005, 0.01,  0.02]
-  #   lr_schedule: constant-linear
-  #   warm_up_fraction: 0.4
-  #   ns_steps: 5
-  #   polar_params:
-  #     use_fast_apply: False
+  - name: muon-you
+    # lr: [ 0.05]
+    lr: [0.005, 0.01, 0.02]
+    weight_decay: 0.1
+    lr_schedule: constant-linear
+    warm_up_fraction: 0.4
+    ns_steps: 5
 
-  # - name: muon-keller
-  #   # lr: [ 0.05]squeue 
-  #   lr: [  0.02, 0.05]
-  #   weight_decay: 0.1
-  #   lr_schedule: constant-linear
-  #   warm_up_fraction: 0.4
-  #   ns_steps: 5
+  - name: muon-jordan
+    # lr: [ 0.05]
+    lr: [0.005, 0.01, 0.02]
+    weight_decay: 0.1
+    lr_schedule: constant-linear
+    warm_up_fraction: 0.4
+    ns_steps: 5
 
-  # - name: muon-compact
-  #   lr: [ 0.05]
-  #   weight_decay: 0.1
-  #   lr_schedule: constant-linear
-  #   warm_up_fraction: 0.4
-  #   ns_steps: 5
-  #   polar_params:
-  #     deflation_eps: 0.01
-  #     pinpoint_top: False
-  #     fast_apply_restart: 1
+  - name: muon-polarexpress
+    # lr: [ 0.02]
+    lr: [0.005, 0.01, 0.05]
+    weight_decay: 0.1
+    lr_schedule: constant-linear
+    warm_up_fraction: 0.4
+    ns_steps: 5
 
 
 training_params:
@@ -55,7 +51,8 @@ logging_params:
   save_ckpt_step: 500
   load_ckpt_step: 0
   keep_last: 2
-  ckpt_dir: "/mnt/ceph/users/rgower/gptopt/"
+  ckpt_dir: "outputs/checkpoints"
+  results_dir: "outputs/results"
 
 # Large: 774M params 
 # (n_embd: 1280, n_layer: 36, n_head: 20)
