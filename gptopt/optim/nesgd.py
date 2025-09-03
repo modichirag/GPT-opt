@@ -147,7 +147,7 @@ class NESGD(torch.optim.Optimizer):
             # truncation variables.
             current_loss_model = 0.0
             new_loss_model = 0.0
-            for i, p in enumerate(group["params"]):
+            for p in group["params"]:
                 g = p.grad
                 if g is None:
                     continue
@@ -162,11 +162,14 @@ class NESGD(torch.optim.Optimizer):
                     buf.lerp_(g, 1 - beta1)
                     buf2.lerp_(g.square(), 1 - beta2)
 
-                else:
+                elif state["norm"] in ["spectral", "linfty"]:
                     if "momentum_buffer" not in state:
                         state["momentum_buffer"] = g.clone()
                     buf = state["momentum_buffer"]
                     buf.mul_(momentum).add_(g, alpha=1.0-momentum)
+
+                else:
+                    raise NotImplementedError
 
                 if self.use_truncation:
                     current_loss_model += torch.sum(torch.mul(p.data, p.grad.data))
@@ -175,7 +178,7 @@ class NESGD(torch.optim.Optimizer):
             # Second pass over parameters: Compute dual norm of layer gradients, if
             # needed.
             need_dual_norms = not (lmo and prod_norm == "linfty") or self.use_truncation
-            for i, p in enumerate(group["params"]):
+            for p in group["params"]:
                 g = p.grad
                 if g is None:
                     continue
@@ -194,14 +197,14 @@ class NESGD(torch.optim.Optimizer):
                     state["layer_dual_norm"] = torch.sum(torch.abs(pre_lmo)) / linfty_scale
 
                 elif state["norm"] == "adam_infty":
-                    buf1 = state["momentum_buffer"]
-                    buf2 = state["sq_momentum_buffer"]
-                    state["layer_dual_norm"] = torch.sum(torch.abs(buf1 / (eps + buf2.sqrt()) * pre_lmo))
+                    m = state["momentum_buffer"]
+                    v = state["sq_momentum_buffer"]
+                    state["layer_dual_norm"] = torch.sum(torch.abs(m / (eps + v.sqrt()) * pre_lmo))
 
                 elif state["norm"] == "adam_2":
-                    buf1 = state["momentum_buffer"]
-                    buf2 = state["sq_momentum_buffer"]
-                    state["layer_dual_norm"] = torch.linalg.vector_norm(buf1 / (eps + buf2.sqrt()).sqrt())
+                    m = state["momentum_buffer"]
+                    v = state["sq_momentum_buffer"]
+                    state["layer_dual_norm"] = torch.linalg.vector_norm(m / (eps + v.sqrt()).sqrt(), ord=2)
 
                 elif state["norm"] == "spectral":
 
@@ -264,7 +267,7 @@ class NESGD(torch.optim.Optimizer):
             self.step_size_list.append(current_lr)
 
             # Third pass over parameters: apply weight updates.
-            for i, p in enumerate(group["params"]):
+            for p in group["params"]:
                 g = p.grad
                 if g is None:
                     continue
@@ -277,7 +280,8 @@ class NESGD(torch.optim.Optimizer):
                     post_lmo = torch.sign(pre_lmo) / linfty_scale
 
                 elif state["norm"] == "adam_infty":
-                    post_lmo = pre_lmo / (eps + state["sq_momentum_buffer"].sqrt())
+                    v = state["sq_momentum_buffer"]
+                    post_lmo = pre_lmo / (eps + v.sqrt())
 
                 elif state["norm"] == "adam_2":
                     v = state["sq_momentum_buffer"]
@@ -296,7 +300,7 @@ class NESGD(torch.optim.Optimizer):
                 else:
                     raise NotImplementedError
 
-                # Apply scaling factors to lr depending on product norm and LMO vs GD.
+                # Apply scaling factors to lr depending on product norm.
                 if prod_norm == "linfty":
                     lr_scale = 1
                 elif prod_norm == "l2":
@@ -319,3 +323,5 @@ class NESGD(torch.optim.Optimizer):
 
                 # apply update
                 p.data.add_(post_lmo, alpha=-adjusted_lr)
+
+        return loss
