@@ -4,7 +4,137 @@ import math
 from .polar import PolarExpress
 
 
-norm_options = ["spectral", "linfty", "adam_infty", "adam_2"]
+
+class LinftyNorm:
+    def __init__(self):
+        pass
+
+    def lmo(self, g, state):
+        return torch.sign(g)
+
+    def dual(self, g, state):
+        return torch.linalg.vector_norm(g, ord=1)
+
+
+class SpectralNorm:
+    def __init__(self, nuc_approx=None, ns_steps=5):
+        assert nuc_approx in [None, "fro", "past"]
+        self.nuc_approx = nuc_approx
+        self.ns_steps = 5
+
+    def lmo(self, g, state):
+        return PolarExpress(g, steps=self.ns_steps)
+
+    def dual(self, g, state):
+        if self.nuc_approx is None or (self.nuc_approx == "past" and "past_nuc" not in state):
+            # If G = UDV^T, then nuc(G) = tr(G @ UV^T).
+            u = PolarExpress(g, steps=self.ns_steps)
+            nuc = torch.trace(g.bfloat16().T @ u)
+        elif self.nuc_approx == "fro":
+            nuc = torch.linalg.matrix_norm(g, ord="fro")
+        elif self.nuc_approx == "past":
+            nuc = state["past_nuc"]
+        else:
+            raise NotImplementedError
+
+        return nuc
+
+
+class AdamLinftyNorm:
+    def __init__(self, eps=1e-8):
+        self.eps = eps
+
+    def lmo(self, g, state):
+        m = state["momentum_buffer"]
+        v = state["sq_momentum_buffer"]
+        return torch.sign(g) * torch.abs(m) / (self.eps + v.sqrt())
+
+    def dual(self, g, state):
+        m = state["momentum_buffer"]
+        v = state["sq_momentum_buffer"]
+        return torch.linalg.vector_norm(g * torch.abs(m) / (self.eps + v.sqrt()), ord=1)
+
+
+class AdamL2Norm:
+    def __init__(self, eps=1e-8):
+        self.eps = eps
+
+    def lmo(self, g, state):
+        v = state["sq_momentum_buffer"]
+        return g / ((self.eps + v.sqrt()) * self.dual(g, state))
+
+    def dual(self, g, state):
+        v = state["sq_momentum_buffer"]
+        return torch.linalg.vector_norm(g / (self.eps + v.sqrt()).sqrt(), ord=2)
+
+
+class LinftyProductNorm:
+    def lmo(muon_dual_norms, other_dual_norms):
+        lmo_dict = {}
+        layer_dual_norms = muon_dual_norms | other_dual_norms
+        for p in layer_dual_norms:
+            lmo_dict[p] = torch.sign(layer_dual_norms[p])
+        return lmo_dict
+
+    def dual(muon_dual_norms, other_dual_norms):
+        layer_dual_norms = torch.stack(
+            [muon_dual_norms[p] for p in muon_dual_norms] +
+            [other_dual_norms[p] for p in other_dual_norms]
+        )
+        return torch.linalg.vector_norm(layer_dual_norms, ord=1)
+
+
+class L2ProductNorm:
+    def lmo(muon_dual_norms, other_dual_norms):
+        global_dual_norm = L2ProductNorm.dual(muon_dual_norms, other_dual_norms)
+        layer_dual_norms = muon_dual_norms | other_dual_norms
+        lmo_dict = {}
+        for p in layer_dual_norms:
+            lmo_dict[p] = layer_dual_norms[p] / global_dual_norm
+        return lmo_dict
+
+    def dual(muon_dual_norms, other_dual_norms):
+        layer_dual_norms = torch.stack(
+            [muon_dual_norms[p] for p in muon_dual_norms] +
+            [other_dual_norms[p] for p in other_dual_norms]
+        )
+        return torch.linalg.vector_norm(layer_dual_norms, ord=2)
+
+
+class HybridProductNorm:
+    def lmo(muon_dual_norms, other_dual_norms):
+        muon_vec = torch.stack([muon_dual_norms[p] for p in muon_dual_norms])
+        other_vec = torch.stack([other_dual_norms[p] for p in other_dual_norms])
+        muon_dual_norm = torch.linalg.vector_norm(muon_vec, ord=1)
+        other_dual_norm = torch.linalg.vector_norm(other_vec, ord=2)
+        global_dual_norm = (muon_dual_norm.square() + other_dual_norm.square()).sqrt()
+
+        lmo_dict = {}
+        for p in muon_dual_norms:
+            lmo_dict[p] = muon_dual_norm / global_dual_norm
+        for p in other_dual_norms:
+            lmo_dict[p] = other_dual_norms[p] / global_dual_norm
+        return lmo_dict
+
+    def dual(muon_dual_norms, other_dual_norms):
+        muon_vec = torch.stack([muon_dual_norms[p] for p in muon_dual_norms])
+        other_vec = torch.stack([other_dual_norms[p] for p in other_dual_norms])
+        muon_dual_norm = torch.linalg.vector_norm(muon_vec, ord=1)
+        other_dual_norm = torch.linalg.vector_norm(other_vec, ord=2)
+        return (muon_dual_norm.square() + other_dual_norm.square()).sqrt()
+
+
+norm_obj_dict = {
+    "linfty": LinftyNorm,
+    "spectral": SpectralNorm,
+    "adam_infty": AdamLinftyNorm,
+    "adam_2": AdamL2Norm,
+}
+product_norm_obj_dict = {
+    "linfty": LinftyProductNorm,
+    "l2": L2ProductNorm,
+    "hybrid": HybridProductNorm,
+}
 
 
 class NESGD(torch.optim.Optimizer):
@@ -68,27 +198,24 @@ class NESGD(torch.optim.Optimizer):
             lr=lr,
             wd=wd,
             momentum=momentum,
-            ns_steps=ns_steps,
-            lmo=lmo,
-            prod_norm=prod_norm,
-            nuc_approx=nuc_approx,
-            linfty_scale=linfty_scale,
-            embed_norm=embed_norm,
             adamw_betas=adamw_betas,
-            adamw_eps=adamw_eps,
-            truncate_loss=truncate_loss,
         )
+        self.lmo = lmo
+        self.nuc_approx = nuc_approx
+        self.truncate_loss = truncate_loss
 
         # Assign a norm to each parameter.
-        sorted_params = {norm: [] for norm in norm_options}
+        self.embed_norm = embed_norm
+        sorted_params = {}
         for name, p in named_params:
             if p.ndim >= 2 and not any(excluded in name for excluded in ["embeddings", "embed_tokens", "wte", "lm_head", "wpe"]):
                 assert p.ndim == 2 # sanity check that we aren't applying Muon for any parameters with more than 2 axes
                 current_norm = "spectral"
             else:
-                current_norm = embed_norm
+                current_norm = self.embed_norm
+            if current_norm not in sorted_params:
+                sorted_params[current_norm] = []
             sorted_params[current_norm].append(p)
-        self.embed_norm = embed_norm
 
         # Register all parameters.
         params = []
@@ -98,15 +225,26 @@ class NESGD(torch.optim.Optimizer):
 
         # Encode parameter norms in optimizer state.
         for norm in sorted_params:
+
+            norm_kwargs = {}
+            if norm == "spectral":
+                norm_kwargs["nuc_approx"] = nuc_approx
+                norm_kwargs["ns_steps"] = ns_steps
+            elif norm == ["adam_infty", "adam_2"]:
+                norm_kwargs["eps"] = adamw_eps
+
             for p in sorted_params[norm]:
                 self.state[p]["norm"] = norm
+                self.state[p]["norm_obj"] = norm_obj_dict[norm](**norm_kwargs)
+
+        self.product_norm = prod_norm
+        self.product_norm_obj = product_norm_obj_dict[prod_norm]
 
         # Set up model truncation.
-        self.use_truncation = truncate_loss is not None
+        self.use_truncation = self.truncate_loss is not None
         if self.use_truncation:
             self.loss_model = None
         self.step_size_list = list()
-
 
     def step(self, closure=None, loss=None):
         """Perform a single optimization step.
@@ -135,18 +273,13 @@ class NESGD(torch.optim.Optimizer):
             lr = group["lr"]
             wd = group["wd"]
             momentum = group["momentum"]
-            lmo = group["lmo"]
-            prod_norm = group["prod_norm"]
-            nuc_approx = group["nuc_approx"]
-            linfty_scale = group["linfty_scale"]
             beta1, beta2 = group["adamw_betas"]
-            eps = group["adamw_eps"]
-            truncate_loss = group["truncate_loss"]
 
-            # First pass over parameters: Compute momentum/Adam buffers and model
-            # truncation variables.
+            # First pass over parameters: Compute momentum/Adam buffers, model
+            # truncation variables, and per-layer dual norm of momentum.
             current_loss_model = 0.0
             new_loss_model = 0.0
+            need_dual_norms = not (self.lmo and self.product_norm == "linfty") or self.use_truncation
             for p in group["params"]:
                 g = p.grad
                 if g is None:
@@ -164,97 +297,41 @@ class NESGD(torch.optim.Optimizer):
 
                 elif state["norm"] in ["spectral", "linfty"]:
                     if "momentum_buffer" not in state:
-                        state["momentum_buffer"] = g.clone()
+                        state["momentum_buffer"] = torch.zeros_like(g)
                     buf = state["momentum_buffer"]
                     buf.mul_(momentum).add_(g, alpha=1.0-momentum)
 
                 else:
                     raise NotImplementedError
 
+                if not need_dual_norms:
+                    continue
+
+                # Update model truncation variables.
                 if self.use_truncation:
                     current_loss_model += torch.sum(torch.mul(p.data, p.grad.data))
                     new_loss_model += torch.sum(torch.mul(p.data, buf.data))
 
-            # Second pass over parameters: Compute dual norm of layer gradients, if
-            # needed.
-            need_dual_norms = not (lmo and prod_norm == "linfty") or self.use_truncation
-            for p in group["params"]:
-                g = p.grad
-                if g is None:
-                    continue
-
-                state = self.state[p]
+                # Compute dual norm of layer momentum.
                 if "layer_dual_norm" not in state:
                     state["layer_dual_norm"] = torch.zeros(1, device=p.device)
+                state["layer_dual_norm"] = state["norm_obj"].dual(buf, state)
 
-                # quit now if update doesn't depend on dual norm of layer gradients.
-                if not need_dual_norms:
-                    break
-
-                # Compute dual norm of layer gradient.
-                pre_lmo = state["momentum_buffer"]
-                if state["norm"] == "linfty":
-                    state["layer_dual_norm"] = torch.sum(torch.abs(pre_lmo)) / linfty_scale
-
-                elif state["norm"] == "adam_infty":
-                    m = state["momentum_buffer"]
-                    v = state["sq_momentum_buffer"]
-                    state["layer_dual_norm"] = torch.sum(torch.abs(m / (eps + v.sqrt()) * pre_lmo))
-
-                elif state["norm"] == "adam_2":
-                    m = state["momentum_buffer"]
-                    v = state["sq_momentum_buffer"]
-                    state["layer_dual_norm"] = torch.linalg.vector_norm(m / (eps + v.sqrt()).sqrt(), ord=2)
-
-                elif state["norm"] == "spectral":
-
-                    # Compute or approximate nuclear norm of layer gradient.
-                    if nuc_approx is None or (nuc_approx == "past" and "past_nuc" not in state):
-                        # If G = UDV^T, then nuc(G) = tr(G @ UV^T).
-                        u = PolarExpress(pre_lmo, steps=group["ns_steps"])
-                        state["layer_dual_norm"] = torch.trace(pre_lmo.bfloat16().T @ u)
-
-                    elif nuc_approx == "fro":
-                        state["layer_dual_norm"] = torch.linalg.matrix_norm(pre_lmo, ord="fro")
-                    elif nuc_approx == "past":
-                        state["layer_dual_norm"] = state["past_nuc"]
-                    else:
-                        raise NotImplementedError
-
-                else:
-                    raise NotImplementedError
-
-            # Compute dual norm of each layer's gradient, which is used to scale LR.
+            # Compute dual norm of overall momentum, and per-layer LR scalings.
             global_dual_norm = None
             if need_dual_norms:
-                if prod_norm == "linfty":
-                    layer_dual_norms = torch.stack([
-                        self.state[p]["layer_dual_norm"] for p in group["params"]
-                        if p.grad is not None
-                    ])
-                    global_dual_norm = torch.linalg.vector_norm(layer_dual_norms, ord=1)
-                elif prod_norm == "l2":
-                    layer_dual_norms = torch.stack([
-                        self.state[p]["layer_dual_norm"] for p in group["params"]
-                        if p.grad is not None
-                    ])
-                    global_dual_norm = torch.linalg.vector_norm(layer_dual_norms, ord=2)
-                elif prod_norm == "hybrid":
-                    muon_dual_norms = torch.stack([
-                        self.state[p]["layer_dual_norm"] for p in group["params"]
-                        if p.grad is not None and self.state[p]["norm"] == "spectral"
-                    ])
-                    muon_dual_norm = torch.sum(muon_dual_norms)
-
-                    other_dual_norms = torch.stack([
-                        self.state[p]["layer_dual_norm"] for p in group["params"]
-                        if p.grad is not None and self.state[p]["norm"] == self.embed_norm
-                    ])
-                    other_dual_norm = torch.linalg.vector_norm(other_dual_norms, ord=2)
-
-                    global_dual_norm = (muon_dual_norm.square() + other_dual_norm.square()).sqrt()
-                else:
-                    raise NotImplementedError
+                muon_dual_norms = {
+                    p: self.state[p]["layer_dual_norm"] for p in group["params"]
+                    if p.grad is not None and self.state[p]["norm"] == "spectral"
+                }
+                other_dual_norms = {
+                    p: self.state[p]["layer_dual_norm"] for p in group["params"]
+                    if p.grad is not None and self.state[p]["norm"] == self.embed_norm
+                }
+                global_dual_norm = self.product_norm_obj.dual(muon_dual_norms, other_dual_norms)
+                lr_scalings = self.product_norm_obj.lmo(muon_dual_norms, other_dual_norms)
+            else:
+                lr_scalings = {p: 1.0 for p in group["params"] if p.grad is not None}
 
             # Update running average for truncated model and compute truncated lr.
             current_lr = lr
@@ -263,10 +340,13 @@ class NESGD(torch.optim.Optimizer):
                 if self.loss_model is None:
                     self.loss_model = loss_model_update
                 self.loss_model = momentum * self.loss_model + (1 - momentum) * loss_model_update
-                current_lr = min((self.loss_model - truncate_loss + new_loss_model.item()) / global_dual_norm ** 2, lr)
+                current_lr = min(
+                    (self.loss_model - self.truncate_loss + new_loss_model.item()) / global_dual_norm ** 2,
+                    lr
+                )
             self.step_size_list.append(current_lr)
 
-            # Third pass over parameters: apply weight updates.
+            # Second pass over parameters: apply weight updates.
             for p in group["params"]:
                 g = p.grad
                 if g is None:
@@ -274,48 +354,19 @@ class NESGD(torch.optim.Optimizer):
 
                 state = self.state[p]
                 pre_lmo = state["momentum_buffer"]
+                post_lmo = state["norm_obj"].lmo(pre_lmo, state)
 
-                # Compute update direction.
-                if state["norm"] == "linfty":
-                    post_lmo = torch.sign(pre_lmo) / linfty_scale
+                # Compute and store nuclear norm if necessary.
+                if state["norm"] == "spectral" and self.nuc_approx == "past":
+                    if "past_nuc" not in state:
+                        state["past_nuc"] = torch.zeros(1, device=p.device)
+                    # If G = UDV^T, then nuc(G) = tr(G @ UV^T).
+                    state["past_nuc"] = torch.trace(pre_lmo.bfloat16().T @ post_lmo)
 
-                elif state["norm"] == "adam_infty":
-                    v = state["sq_momentum_buffer"]
-                    post_lmo = pre_lmo / (eps + v.sqrt())
-
-                elif state["norm"] == "adam_2":
-                    v = state["sq_momentum_buffer"]
-                    dual_norm = torch.linalg.vector_norm(pre_lmo / (eps + v.sqrt()).sqrt())
-                    post_lmo = pre_lmo / ((eps + v.sqrt()) * dual_norm)
-
-                elif state["norm"] == "spectral":
-                    post_lmo = PolarExpress(pre_lmo, steps=group["ns_steps"])
-
-                    # Compute and store nuclear norm of pre_lmo if necessary.
-                    if nuc_approx == "past":
-                        if "past_nuc" not in state:
-                            state["past_nuc"] = torch.zeros(1, device=p.device)
-                        state["past_nuc"] = torch.trace(pre_lmo.bfloat16().T @ post_lmo)
-
-                else:
-                    raise NotImplementedError
-
-                # Apply scaling factors to lr depending on product norm.
-                if prod_norm == "linfty":
-                    lr_scale = 1
-                elif prod_norm == "l2":
-                    lr_scale = state["layer_dual_norm"] / global_dual_norm
-                elif prod_norm == "hybrid":
-                    if state["norm"] == "spectral":
-                        lr_scale = muon_dual_norm / global_dual_norm
-                    else:
-                        lr_scale = state["layer_dual_norm"] / global_dual_norm
-                else:
-                    raise NotImplementedError
-
-                if not lmo:
+                # Apply layer-wise scaling to lr.
+                lr_scale = lr_scalings[p]
+                if not self.lmo:
                     lr_scale *= global_dual_norm
-
                 adjusted_lr = lr_scale * current_lr
 
                 # apply weight decay
