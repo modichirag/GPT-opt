@@ -17,13 +17,14 @@ class LinftyNorm:
 
 
 class SpectralNorm:
-    def __init__(self, nuc_approx=None, ns_steps=5):
+    def __init__(self, spectral_scale=1.0, nuc_approx=None, ns_steps=5):
         assert nuc_approx in [None, "fro", "past"]
+        self.spectral_scale = spectral_scale
         self.nuc_approx = nuc_approx
         self.ns_steps = 5
 
     def lmo(self, g, state):
-        return PolarExpress(g, steps=self.ns_steps)
+        return self.spectral_scale * PolarExpress(g, steps=self.ns_steps)
 
     def dual(self, g, state):
         if self.nuc_approx is None or (self.nuc_approx == "past" and "past_nuc" not in state):
@@ -37,7 +38,7 @@ class SpectralNorm:
         else:
             raise NotImplementedError
 
-        return nuc
+        return self.spectral_scale * nuc
 
 
 class AdamLinftyNorm:
@@ -155,23 +156,29 @@ class NESGD(torch.optim.Optimizer):
         momentum: The momentum used for gradient accumulation. (0.95 is a good default)
         ns_steps: The number of Newton-Schulz iterations to run. (6 is probably always enough)
         lmo: Whether to use LMO instead of variational viewpoint of gradient descent to
-        derive update rule. If lmo=False, update is additionally scaled by the dual norm
-        of the gradient.
+            derive update rule. If lmo=False, update is additionally scaled by the dual
+            norm of the gradient.
         prod_norm: Which product norm to use. Choices ["linfty", "l2", "hybrid"].
-        instead of the max norm, which scales each layer's LR by the nuclear norm of the
-        gradient. "hybrid" applies the linfty norm to the product of all muon layers,
-        the l2 norm to the product of all non-muon layers, then takes the l2 norm of the
-        resulting two-coordinate vector.
-        nuc_approx: How to approximate the gradient nuclear norm. Choices: [None, 'fro', 'past']
-        linfty_scale: Coefficient for norm of layers with "linfty" norm. Will scale the
-        learning rate of these layers by `1/linfty_scale` for LMO and
-        `1/linfty_scale**2` for GD.
+            instead of the max norm, which scales each layer's LR by the nuclear norm of
+            the gradient. "hybrid" applies the linfty norm to the product of all muon
+            layers, the l2 norm to the product of all non-muon layers, then takes the l2
+            norm of the resulting two-coordinate vector.
+        nuc_approx: How to approximate the gradient nuclear norm. Choices: [None, 'fro',
+            'past']
+        spectral_scale: Scales spectral norm by `1/spectral_scale`. Will scale the
+            layer-wise dual and lmo of these layers by `spectral_scale`, which affects
+            the effective LR for these layers in different ways depending on the product
+            norm. If using the linfty product norm and lmo=True (as in Muon and Scion),
+            this scales the Muon LR by `spectral_scale`. If using the l2 or hybrid
+            product norm and lmo=False (as in MuonMax and PolarGrad), this scales the
+            Muon LR by `spectral_scale**2`.
         embed_norm: Which norm to use on embedding layer parameters. Choices: ["linfty",
-        "adam_infty", "adam_2"]. Note that "adam_infty" will essentially induce Adam when
-        lmo=True, and an unnormalized version of Adam when lmo=False, while "adam_2"
-        will induce Adam when lmo=False, and a normalized version of Adam when lmo=True.
-        adamw_betas:
-        layer, which scale each layer's LR by sqrt(fan_out/fan_in).
+            "adam_infty", "adam_2"]. Note that "adam_infty" will essentially induce Adam
+            when lmo=True, and an unnormalized version of Adam when lmo=False, while
+            "adam_2" will induce Adam when lmo=False, and a normalized version of Adam
+            when lmo=True.
+        adamw_betas: (beta1, beta2) for adam.
+        adamw_eps: epsilon for adam.
         truncate_loss: Lower bound of loss, if using a truncated model.
     """
     def __init__(
@@ -184,7 +191,7 @@ class NESGD(torch.optim.Optimizer):
         lmo=False,
         prod_norm="linfty",
         nuc_approx=None,
-        linfty_scale=1.0,
+        spectral_scale=1.0,
         embed_norm="linfty",
         adamw_betas=(0.95, 0.95),
         adamw_eps=1e-8,
@@ -193,6 +200,8 @@ class NESGD(torch.optim.Optimizer):
 
         assert prod_norm in ["linfty", "l2", "hybrid"]
         assert embed_norm in ["linfty", "adam_infty", "adam_2"]
+        if truncate_loss is not None:
+            assert momentum == adamw_betas[0]
 
         defaults = dict(
             lr=lr,
@@ -202,6 +211,7 @@ class NESGD(torch.optim.Optimizer):
         )
         self.lmo = lmo
         self.nuc_approx = nuc_approx
+        self.spectral_scale = spectral_scale
         self.truncate_loss = truncate_loss
 
         # Assign a norm to each parameter.
@@ -228,6 +238,7 @@ class NESGD(torch.optim.Optimizer):
 
             norm_kwargs = {}
             if norm == "spectral":
+                norm_kwargs["spectral_scale"] = spectral_scale
                 norm_kwargs["nuc_approx"] = nuc_approx
                 norm_kwargs["ns_steps"] = ns_steps
             elif norm == ["adam_infty", "adam_2"]:

@@ -170,7 +170,7 @@ def get_optimizer(opt_config: dict, lr = 1e-3) -> Tuple[torch.optim.Optimizer, d
                   'lmo': lmo,
                   'prod_norm': prod_norm,
                   'nuc_approx': nuc_approx,
-                  'linfty_scale': opt_config.get('linfty_scale', 0.01),
+                  'spectral_scale': opt_config.get('spectral_scale', 1.0),
                   'embed_norm': embed_norm,
                   'adamw_betas': opt_config.get('betas', (0.95, 0.95)),
                   'truncate_loss': truncate_loss,
