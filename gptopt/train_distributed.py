@@ -43,7 +43,8 @@ def train(train_dataloader, val_dataloader, model, optimizer, training_params, l
     master_process = (rank == 0)
     logger = Logging()
     optimizer_name = optimizer.__class__.__name__
-    if 'Momo' in optimizer_name or (optimizer_name == "Muon" and optimizer.use_truncation):
+    use_truncation = 'Momo' in optimizer_name or (hasattr(optimizer, "use_truncation") and optimizer.use_truncation)
+    if use_truncation:
         pass_loss = True
     else:
         pass_loss = False
@@ -58,6 +59,8 @@ def train(train_dataloader, val_dataloader, model, optimizer, training_params, l
     if master_process: print(f"Accumulate gradient for {grad_accum_steps} steps")
     total_iterations = int(training_params['num_epochs'] * len(train_dataloader) / training_params['tokens_processed'])
     max_grad_norm = training_params['gradnorm'] if training_params['gradnorm'] != 0. else float('inf')
+    if use_truncation and max_grad_norm < float('inf'):
+        print("Using model truncation together with gradient clipping. Are you sure you want to do this???")
 
     load_ckpt_step = logging_params['load_ckpt_step']
     if load_ckpt_step != 0:
