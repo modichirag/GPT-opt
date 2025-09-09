@@ -1,3 +1,5 @@
+from copy import deepcopy
+
 from run_parallel import run_parallel
 
 
@@ -74,10 +76,10 @@ for alg, settings in alg_settings.items():
             "truncate_loss": loss_lb,
         }
         opt_settings.update(alg_settings[alg])
-        current_config = dict(base_config)
+        current_config = deepcopy(base_config)
         current_config["optimizer_params"][0].update(dict(opt_settings))
         run_name = f"{family_idx}_{family_name}/{alg}_{loss_lb}"
-        experiment_configs[run_name] = dict(current_config)
+        experiment_configs[run_name] = deepcopy(current_config)
 
     # Add runs without truncation/width clipping as a sanity check.
     optimizer_name = optimizer_name[:-5] # remove momo from name
@@ -88,12 +90,11 @@ for alg, settings in alg_settings.items():
             "lr": list(lrs),
         }
         opt_settings.update(alg_settings[alg])
-        current_config = dict(base_config)
+        current_config = deepcopy(base_config)
         current_config["optimizer_params"][0].update(dict(opt_settings))
         current_config["training_params"]["gradnorm"] = gradnorm
         run_name = f"{family_idx}_{family_name}/{real_alg}_clip_{gradnorm}"
-
-        experiment_configs[run_name] = dict(current_config)
+        experiment_configs[run_name] = deepcopy(current_config)
 
 # Launch runs in parallel.
 run_parallel(experiment_configs)

@@ -1,8 +1,9 @@
 """ Launch parallel slurm jobs to run a given list of training configs. """
 
 import os
-import subprocess
 from typing import Dict
+import subprocess
+import time
 
 import yaml
 
@@ -27,13 +28,20 @@ source gptopt/bin/activate
 time torchrun --standalone --nproc_per_node=4 run.py --config {CONFIG_DIR}/{name}.yaml""" 
 
 
+def get_config_path(name):
+    return os.path.join(CONFIG_DIR, name + ".yaml")
+
+def get_launch_path(name):
+    return os.path.join(name + ".sh")
+
+
 def run_parallel(configs: Dict[str, Dict]):
 
-    processes = []
+    job_ids = []
     for name, config in configs.items():
 
         # Write config file.
-        config_path = os.path.join(CONFIG_DIR, name + ".yaml")
+        config_path = get_config_path(name)
         config_dir = os.path.dirname(config_path)
         if not os.path.isdir(config_dir):
             os.makedirs(config_dir)
@@ -42,7 +50,7 @@ def run_parallel(configs: Dict[str, Dict]):
 
         # Write launch script.
         current_launch_script = get_launch_script(name)
-        launch_path = os.path.join(name + ".sh")
+        launch_path = get_launch_path(name)
         launch_dir = os.path.dirname(launch_path)
         if not os.path.isdir(launch_dir):
             os.makedirs(launch_dir)
@@ -51,11 +59,36 @@ def run_parallel(configs: Dict[str, Dict]):
 
         # Launch a slurm job for each individual run.
         cmd = f"sbatch {launch_path}".split()
-        processes.append(subprocess.Popen(cmd))
+        p = subprocess.Popen(
+            cmd,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
+            text=True,
+        )
+        stdout, stderr = p.communicate()
+        job_ids.append(stdout.strip().split()[-1])
 
     # Wait for slurm jobs to finish.
-    # TODO: This is not the right way to wait for the processes to finish. This only
-    # waits for the sbatch command to finish, which happens right away. Need to grab the
-    # slurm job id and wait for that.
-    for process in processes:
-        process.wait()
+    while len(job_ids) > 0:
+        time.sleep(10)
+        still_running = []
+        for job_id in job_ids:
+            cmd = "squeue -h -j {job_id}".split()
+            squeue = subprocess.run(
+                cmd,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+            )
+            if job_id not in squeue.stdout:
+                still_running.append(job_id)
+        job_ids = list(still_running)
+
+    # Delete launch scripts.
+    for name in configs.keys():
+        launch_path = get_launch_path(name)
+        if os.path.isfile(launch_path):
+            os.remove(launch_path)
+        launch_dir = os.path.dirname(launch_path)
+        if len(os.listdir(launch_dir)) == 0:
+            os.rmdir(launch_dir)
