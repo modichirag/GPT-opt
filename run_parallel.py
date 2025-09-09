@@ -34,12 +34,18 @@ def run_parallel(configs: Dict[str, Dict]):
 
         # Write config file.
         config_path = os.path.join(CONFIG_DIR, name + ".yaml")
+        config_dir = os.path.dirname(config_path)
+        if not os.path.isdir(config_dir):
+            os.makedirs(config_dir)
         with open(config_path, "w") as config_file:
             yaml.dump(config, config_file)
 
         # Write launch script.
         current_launch_script = get_launch_script(name)
         launch_path = os.path.join(name + ".sh")
+        launch_dir = os.path.dirname(launch_path)
+        if not os.path.isdir(launch_dir):
+            os.makedirs(launch_dir)
         with open(launch_path, "w") as launch_file:
             launch_file.write(current_launch_script)
 
@@ -48,5 +54,8 @@ def run_parallel(configs: Dict[str, Dict]):
         processes.append(subprocess.Popen(cmd))
 
     # Wait for slurm jobs to finish.
+    # TODO: This is not the right way to wait for the processes to finish. This only
+    # waits for the sbatch command to finish, which happens right away. Need to grab the
+    # slurm job id and wait for that.
     for process in processes:
         process.wait()

@@ -148,6 +148,10 @@ def main(config_file=None):
                 'muon-nonlmo-nuc_past-momo': '#00518F',
                 'sign-gd': '#61ACE5',
                 'sign-gd-nonlmo': '#00518F',
+                'nesgd-adam_infty-lmo': '#7FFFD4',
+                'nesgd-adam_2-hybrid_prod': '#61ACE5',
+                'nesgd-adam_2-l2_prod': '#BE6400',
+                'nesgd-lmo': '#FF00FF',
     }
     linestylemap = {'momo': None,
                     'sgd-m': None,
@@ -172,6 +176,10 @@ def main(config_file=None):
                     'muon-nonlmo-nuc_past-momo': None,
                     'sign-gd': None,
                     'sign-gd-nonlmo': None,
+                    'nesgd-adam_infty-lmo': None,
+                    'nesgd-adam_2-hybrid_prod': None,
+                    'nesgd-adam_2-l2_prod': None,
+                    'nesgd-lmo': None,
     }
 
     # Collect learning rate ranges for each method

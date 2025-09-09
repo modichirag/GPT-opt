@@ -10,3 +10,4 @@ gptopt/outputs/
 gptopt/pyvenv.cfg
 gptopt/share/
 output/
+__pycache__/

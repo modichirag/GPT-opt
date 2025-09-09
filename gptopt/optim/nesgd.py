@@ -355,7 +355,7 @@ class NESGD(torch.optim.Optimizer):
                     (self.loss_model - self.truncate_loss + new_loss_model.item()) / global_dual_norm ** 2,
                     lr
                 )
-            self.step_size_list.append(current_lr)
+            self.step_size_list.append(float(current_lr))
 
             # Second pass over parameters: apply weight updates.
             for p in group["params"]:
