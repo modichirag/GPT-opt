@@ -95,17 +95,5 @@ for alg, settings in alg_settings.items():
 
         experiment_configs[run_name] = dict(current_config)
 
-# temp: remove experiments that have already been run.
-run_names = list(experiment_configs.keys())
-already_run = [
-    "muon-momo_0.0",
-    "muon-momo_1.6",
-    "muon-momo_2.4",
-    "muon-momo_2.8",
-]
-for run_name in run_names:
-    if any([x in run_name for x in already_run]):
-        del experiment_configs[run_name]
-
 # Launch runs in parallel.
 run_parallel(experiment_configs)
