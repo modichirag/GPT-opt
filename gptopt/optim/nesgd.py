@@ -308,7 +308,7 @@ class NESGD(torch.optim.Optimizer):
 
                 elif state["norm"] in ["spectral", "linfty"]:
                     if "momentum_buffer" not in state:
-                        state["momentum_buffer"] = torch.zeros_like(g)
+                        state["momentum_buffer"] = g.clone()
                     buf = state["momentum_buffer"]
                     buf.mul_(momentum).add_(g, alpha=1.0-momentum)
 
