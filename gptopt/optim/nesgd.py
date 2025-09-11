@@ -351,10 +351,11 @@ class NESGD(torch.optim.Optimizer):
                 if self.loss_model is None:
                     self.loss_model = loss_model_update
                 self.loss_model = momentum * self.loss_model + (1 - momentum) * loss_model_update
-                current_lr = min(
-                    (self.loss_model - self.truncate_loss + new_loss_model.item()) / global_dual_norm ** 2,
-                    lr
-                )
+                truncated_lr = (self.loss_model - self.truncate_loss + new_loss_model.item()) / global_dual_norm ** 2
+                if self.lmo:
+                    truncated_lr *= global_dual_norm
+                current_lr = min(truncated_lr, lr)
+
             self.step_size_list.append(float(current_lr))
 
             # Second pass over parameters: apply weight updates.
