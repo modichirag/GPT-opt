@@ -13,6 +13,7 @@ import torch.distributed as dist
 import copy 
 import json
 import os
+import wandb
 
 parser = argparse.ArgumentParser(description='Train GPT-2 with optional config file.')
 parser.add_argument('--config', type=str, help='Path to config file', default=None)
@@ -96,11 +97,30 @@ for opt_config in list_optimizer_params:
         p = model_copy.named_parameters() if 'muon' in opt_config['name'] else model_copy.parameters()
         optimizer = optimizer_obj(p, **hyperp)
         scheduler = get_scheduler(opt_config, optimizer, total_iterations=total_iterations)
-        
+
+        # Initialize wandb
+        if master_process and config['logging_params'].get('wandb', None) is not None:
+            config_no_optimizer = copy.deepcopy(config)
+            del config_no_optimizer['optimizer_params']
+            wandb_config = dict(one_optimizer_params=opt_config_copy, **config_no_optimizer, world_size=world_size)
+            if "dir" not in config['logging_params']['wandb']:
+                config['logging_params']['wandb']['dir'] = f"{config['logging_params']['ckpt_dir']}/../wandb"
+            wandb_run = wandb.init(
+                **config['logging_params']['wandb'],
+                config=wandb_config,
+                reinit='create_new',
+            )
+        else:
+            wandb_run = None
+
         # Train
-        logger = train(train_dataloader, val_dataloader, model_copy, optimizer, training_params,
-                       scheduler=scheduler, ckpt_dir=ckpt_dir,
-                       logging_params=config['logging_params'])
+        try:
+            logger = train(train_dataloader, val_dataloader, model_copy, optimizer, training_params,
+                        scheduler=scheduler, ckpt_dir=ckpt_dir,
+                        logging_params=config['logging_params'], wandb_run=wandb_run)
+        finally:
+            if master_process and wandb_run is not None:
+                wandb_run.finish()
 
         # Save
         if master_process:

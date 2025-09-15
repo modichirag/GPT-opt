@@ -48,6 +48,12 @@ logging_params:
   keep_last: 2
   ckpt_dir: "outputs/checkpoints"
   results_dir: "outputs/results"
+  wandb:
+    project: "polar-express"
+    dir: "outputs/wandb"
+    # tags: ["tag1", "tag2"]
+    # notes: "Here are some detailed notes"
+    # name: "my fun run"
 
 gpt_model:
   n_embd: 768    

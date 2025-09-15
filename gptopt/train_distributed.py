@@ -37,7 +37,7 @@ def eval_validation_loss(model, val_dataloader, val_accum_steps, autocast_ctxt):
     return val_loss
 
 
-def train(train_dataloader, val_dataloader, model, optimizer, training_params, logging_params, scheduler=None, ckpt_dir=""):
+def train(train_dataloader, val_dataloader, model, optimizer, training_params, logging_params, scheduler=None, ckpt_dir="", wandb_run=None):
     
     world_size, rank, local_rank, device  = get_worker_info()
     master_process = (rank == 0)
@@ -104,6 +104,18 @@ def train(train_dataloader, val_dataloader, model, optimizer, training_params, l
                 #bookkeeping
                 torch.cuda.synchronize()
                 step_time = time.time() - start_time
+                if master_process and wandb_run is not None:
+                    wandb_log_dict = {
+                        "train/loss": loss_accum.item(), 
+                        "train/grad_norm": norm.item(),
+                        "train/step_time": step_time,
+                        "train/step": step
+                    }
+                    if hasattr(optimizer, 'step_size_list'):
+                        wandb_log_dict["train/step_size_list"] = optimizer.step_size_list
+                    for param_group_ix, param_group in enumerate(optimizer.param_groups):
+                        wandb_log_dict[f"train/lr_{param_group_ix}"] = param_group['lr']
+                    wandb_run.log(wandb_log_dict)
                 logger.step_times.append(step_time)  # Are these different across ranks?
                 logger.grad_norms.append(norm.item())
                 for param_group in optimizer.param_groups:
@@ -119,6 +131,8 @@ def train(train_dataloader, val_dataloader, model, optimizer, training_params, l
                     
                 if (step % logging_params['val_step'] == 0):
                     val_loss = eval_validation_loss(model, val_dataloader, val_accum_steps, autocast_ctxt)
+                    if master_process and wandb_run is not None:
+                        wandb_run.log({"val/loss": val_loss.item(), "val/step": step})
                     logger.val_losses.append(val_loss.item())
 
                 if (step % logging_params['save_ckpt_step'] == 0) & (ckpt_dir != ""):
@@ -147,7 +161,9 @@ def train(train_dataloader, val_dataloader, model, optimizer, training_params, l
             if master_process:
                 with open(ckpt_dir + '/log.json', 'w') as file:
                     json.dump(logger.__dict__, file)
-                
+        if master_process and wandb_run is not None:
+            wandb_run.log({"val/loss": val_loss.item(), "val/step": step, "train/loss": logger.losses[-1], "train/step": step})
+
     if hasattr(optimizer, 'step_size_list'):      # Check if optimizer has a step_size_list attribute
         logger.step_size_list = optimizer.step_size_list  
     return logger

@@ -15,6 +15,8 @@ python3 -m pip install -e .
 ```
 Of course, you can name this virtual environment anything you want.
 
+If using wandb, run `wandb login`.
+
 ### Run Example:
 ```bash
 python3 run.py --config configs/shakespeare.yaml
