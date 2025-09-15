@@ -1,0 +1,14 @@
+training_params:
+  tokens_processed: 2048 # 2^11  # 524288 # 2^19
+  val_tokens_processed: 8388608 #2^23
+  batch_size: 2
+  num_epochs: 1
+  context_length: 512
+  gradnorm: 1.0
+  tensorcore_precision: high   #Can be highest, high, or medium
+  autocast: True
+  mixed_precision: bfloat16
+  compile: False
+
+dataset:
+  name: "tiny_shakespeare"  

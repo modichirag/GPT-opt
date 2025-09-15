@@ -1,0 +1,14 @@
+training_params:
+  tokens_processed: 262144 # 2^18  # 524288 # 2^19
+  val_tokens_processed: 8388608 #2^23
+  batch_size: 32
+  num_epochs: 1
+  context_length: 1024
+  gradnorm: 1.0
+  tensorcore_precision: high   #Can be highest, high, or medium
+  autocast: True
+  mixed_precision: bfloat16
+  compile: True
+
+dataset:
+  name: "finewebmini"

@@ -13,6 +13,9 @@ setup(
         'transformers',
         'datasets',
         'accelerate',
+        'tiktoken',
+        'zstandard',
         'wandb',
+        'hydra-core',
     ],
 )
