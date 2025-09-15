@@ -54,6 +54,7 @@ def hash_config(optimizer_config, training_params, gpt_model):
     return hashlib.md5(config_str.encode()).hexdigest()
 
 def set_seed(seed):
+    print(f"Setting random seed to {seed}.")
     random.seed(seed)
     np.random.seed(seed)
     torch.manual_seed(seed)

@@ -18,7 +18,6 @@ parser = argparse.ArgumentParser(description='Train GPT-2 with optional config f
 parser.add_argument('--config', type=str, help='Path to config file', default=None)
 parser.add_argument('--suffix', type=str, help='Path to config file', default='')
 args = parser.parse_args()
-set_seed(42)
 
 # First set up DDP
 ddp = int(os.environ.get('RANK', -1)) != -1 # is this a ddp run?
@@ -45,6 +44,10 @@ if master_process:
     print(f"Training on dataset {config['dataset']['name']}")
     os.makedirs(output_dir, exist_ok=True)  
     if CKPT_DIR != "": os.makedirs(ckpt_dir_base, exist_ok=True)  
+
+# Set seed.
+seed = config["seed"] if "seed" in config else 42
+set_seed(seed)
 
 # Load model
 model = load_model(config['gpt_model'], device)

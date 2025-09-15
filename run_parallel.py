@@ -58,9 +58,10 @@ def run_parallel(configs: Dict[str, Dict]):
             launch_file.write(current_launch_script)
 
         # Launch a slurm job for each individual run.
-        cmd = f"sbatch {launch_path}".split()
+        cmd = f"sbatch {launch_path}"
+
         p = subprocess.Popen(
-            cmd,
+            cmd.split(),
             stdout=subprocess.PIPE,
             stderr=subprocess.PIPE,
             text=True,
@@ -73,9 +74,9 @@ def run_parallel(configs: Dict[str, Dict]):
         time.sleep(10)
         still_running = []
         for job_id in job_ids:
-            cmd = "squeue -h -j {job_id}".split()
+            cmd = "squeue -h -j {job_id}"
             squeue = subprocess.run(
-                cmd,
+                cmd.split(),
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,

@@ -109,9 +109,7 @@ class GPT(nn.Module):
         self.lm_head.LLMC_SKIP_INIT = 1 # don't init this one, we will tie weights
         self.transformer.wte.weight = self.lm_head.weight # https://paperswithcode.com/method/weight-tying
 
-        # init all weights, use a torch rng object to be very careful
-        self.init_rng = torch.Generator(device="cpu") #self.device)
-        self.init_rng.manual_seed(42)
+        # init all weights
         self.apply(self._init_weights)
 
     def _init_weights(self, module):
@@ -121,11 +119,11 @@ class GPT(nn.Module):
             # we want to skip initializing lm_head, which shares parameters with wte
             # and wte was already initialized down below during the Embedding init
             if not hasattr(module, 'LLMC_SKIP_INIT'):
-                torch.nn.init.normal_(module.weight, mean=0.0, std=std, generator=self.init_rng)
+                torch.nn.init.normal_(module.weight, mean=0.0, std=std)
             if module.bias is not None:
                 torch.nn.init.zeros_(module.bias)
         elif isinstance(module, nn.Embedding):
-            torch.nn.init.normal_(module.weight, mean=0.0, std=0.02, generator=self.init_rng)
+            torch.nn.init.normal_(module.weight, mean=0.0, std=0.02)
 
     def forward(self, idx, labels=None, return_logits=True):
         device = idx.device

@@ -213,6 +213,8 @@ class NESGD(torch.optim.Optimizer):
         self.nuc_approx = nuc_approx
         self.spectral_scale = spectral_scale
         self.truncate_loss = truncate_loss
+        if self.nuc_approx is not None:
+            print(f"Using {self.nuc_approx} approximation for nuclear norm.")
 
         # Assign a norm to each parameter.
         self.embed_norm = embed_norm
