@@ -8,7 +8,7 @@ training_params:
   tensorcore_precision: high   #Can be highest, high, or medium
   autocast: True
   mixed_precision: bfloat16
-  compile: False
+  compile: True
 
 dataset:
   name: "tiny_shakespeare"  

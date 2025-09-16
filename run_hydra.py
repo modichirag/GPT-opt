@@ -32,11 +32,11 @@ def main(config : DictConfig):
 
     # Logging
     outputname = HydraConfig.get().job.config_name
-    output_dir = config['logging_params'].get('results_dir', f"dap_outputs/hydra-results/{outputname}")
+    output_dir = config['logging_params'].get('results_dir', f"outputs/hydra-results/{outputname}")
     CKPT_DIR = config['logging_params']['ckpt_dir']
     ckpt_dir_base = CKPT_DIR + f"/{outputname}/" if CKPT_DIR != "" else ""
     if master_process:
-        # print(f"Loading configuration from {config_file}")
+        print(f"Loading configuration from {outputname}")
         print(f"Training on dataset {config['training_data']['dataset']['name']}")
         os.makedirs(output_dir, exist_ok=True)  
         if CKPT_DIR != "": os.makedirs(ckpt_dir_base, exist_ok=True)
@@ -74,25 +74,18 @@ def main(config : DictConfig):
     
     # copy model to ensure consistency
     model_copy = copy.deepcopy(model).to(device)
-    
-    # Setup optimizer
-    optimizer_obj, hyperp = get_optimizer(opt_config, lr=opt_config['lr'])
-
     if training_params['compile']:
         if master_process: print("Compiling model")
         model_copy = torch.compile(model_copy)
 
     if ddp:
         model_copy = DDP(model_copy, device_ids=[local_rank])
-    
+
+    # Setup optimizer
+    optimizer_obj, hyperp = get_optimizer(opt_config, lr=opt_config['lr'])
     opt_name = opt_config['name']
     p = model_copy.named_parameters() if ('muon' in opt_name or 'dap' in opt_name) else model_copy.parameters()
-
-    if 'dap' in opt_name:
-        optimizer = optimizer_obj(model_copy, p, **hyperp)
-    else:
-        optimizer = optimizer_obj(p, **hyperp)
-
+    optimizer = optimizer_obj(p, **hyperp)
     scheduler = get_scheduler(opt_config, optimizer, total_iterations=total_iterations)
 
     # Initialize wandb
@@ -122,7 +115,16 @@ def main(config : DictConfig):
 
     # Save
     if master_process:
-        logger.name = opt_config['name'] + '-lr-' + str(opt_config['lr'])
+        if 'muon-compact' in opt_config['name']:
+            polar_params = opt_config['polar_params']   
+            logger.name = opt_config['name'] + '-pin-' +str(polar_params['pinpoint_top'])
+            logger.name = logger.name + '-ns-' +str(opt_config['ns_steps'])
+            logger.name = logger.name  +'-fa-' +str(polar_params['fast_apply_restart'])
+            logger.name = logger.name  +'-defl-' +str(polar_params['deflation_eps'])
+            logger.name = logger.name  +'-lr-' + str(opt_config['lr'])
+        else:
+            logger.name = opt_config['name'] + '-lr-' + str(opt_config['lr'])
+
         if os.path.exists(output_path):
             print(f"File {output_path} already exists. Overwriting")
         with open(output_path, 'w') as file:

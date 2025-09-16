@@ -5,7 +5,7 @@ training_params:
   num_epochs: 1
   context_length: 1024
   gradnorm: 1.0
-  tensorcore_precision: highest   #Can be highest, high, or medium
+  tensorcore_precision: high   #Can be highest, high, or medium
   autocast: True
   mixed_precision: bfloat16
   compile: True
