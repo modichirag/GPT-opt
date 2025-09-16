@@ -1,6 +1,6 @@
 import torch
 from gptopt.train_distributed import train
-from gptopt.optim.utils import get_scheduler, get_optimizer
+from gptopt.optim.utils import get_scheduler, get_optimizer_factory
 from gptopt.utils import hash_config, set_seed, get_worker_info
 from gptopt.model import load_model
 from gptopt.dataloader import DATA_DIR, ShardedDataLoader
@@ -17,6 +17,7 @@ from omegaconf import DictConfig, OmegaConf
 
 @hydra.main(version_base=None, config_path="hydra_conf")
 def main(config : DictConfig):
+    config = OmegaConf.to_container(config, resolve=True)
     set_seed(42)
 
     # First set up DDP
@@ -64,11 +65,11 @@ def main(config : DictConfig):
 
     print()
     if master_process:
-        print(f"Training with optimizer {opt_config['name']} and learning rate {opt_config['lr']}")
+        print(f"Training with optimizer {opt_config['name']} and learning rate {opt_config['args']['lr']}")
         
     # Generate hash for the current optimizer configuration
-    config_hash = hash_config(OmegaConf.to_container(opt_config), OmegaConf.to_container(training_params), OmegaConf.to_container(config['gpt_model']))
-    file_name = f"{opt_config['name']}-lr-{opt_config['lr']}-{opt_config['lr_schedule']}-{config_hash}-world{world_size}"
+    config_hash = hash_config(opt_config, training_params, config['gpt_model'])
+    file_name = f"{opt_config['name']}-lr-{opt_config['args']['lr']}-{config['lr_schedule']['name']}-{config_hash}-world{world_size}"
     output_path = os.path.join(output_dir, file_name + '.json')
     ckpt_dir = os.path.join(ckpt_dir_base, file_name) + '/' if CKPT_DIR != "" else ""
     
@@ -82,20 +83,16 @@ def main(config : DictConfig):
         model_copy = DDP(model_copy, device_ids=[local_rank])
 
     # Setup optimizer
-    optimizer_obj, hyperp = get_optimizer(opt_config, lr=opt_config['lr'])
-    opt_name = opt_config['name']
-    p = model_copy.named_parameters() if ('muon' in opt_name or 'dap' in opt_name) else model_copy.parameters()
-    optimizer = optimizer_obj(p, **hyperp)
-    scheduler = get_scheduler(opt_config, optimizer, total_iterations=total_iterations)
+    optimizer_obj = get_optimizer_factory(opt_config['name'])
+    optimizer = optimizer_obj(model_copy.named_parameters(), **opt_config['args'])
+    scheduler = get_scheduler(config['lr_schedule'], optimizer, total_iterations=total_iterations)
 
     # Initialize wandb
     if master_process and config['logging_params'].get('wandb', None) is not None:
-        config_no_optimizer = OmegaConf.to_container(config, resolve=True)
-        del config_no_optimizer['optimizer_params']
-        config_for_wandb_logging = dict(one_optimizer_params=opt_config, **config_no_optimizer, world_size=world_size)
-        wandb_config = OmegaConf.to_container(config['logging_params']['wandb'], resolve=True)
+        config_for_wandb_logging = dict(**config, world_size=world_size)
+        wandb_config = config['logging_params']['wandb']
         if "dir" not in wandb_config:
-            wandb_config['dir'] = f"{config['logging_params']['results_dir']}/../wandb"
+            wandb_config['dir'] = f"{config['logging_params']['results_dir']}/../../wandb"
         wandb_run = wandb.init(
             **wandb_config,
             config=config_for_wandb_logging,
@@ -115,15 +112,7 @@ def main(config : DictConfig):
 
     # Save
     if master_process:
-        if 'muon-compact' in opt_config['name']:
-            polar_params = opt_config['polar_params']   
-            logger.name = opt_config['name'] + '-pin-' +str(polar_params['pinpoint_top'])
-            logger.name = logger.name + '-ns-' +str(opt_config['ns_steps'])
-            logger.name = logger.name  +'-fa-' +str(polar_params['fast_apply_restart'])
-            logger.name = logger.name  +'-defl-' +str(polar_params['deflation_eps'])
-            logger.name = logger.name  +'-lr-' + str(opt_config['lr'])
-        else:
-            logger.name = opt_config['name'] + '-lr-' + str(opt_config['lr'])
+        logger.name = opt_config['name'] + '-lr-' + str(opt_config['args']['lr'])
 
         if os.path.exists(output_path):
             print(f"File {output_path} already exists. Overwriting")

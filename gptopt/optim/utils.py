@@ -8,6 +8,27 @@ from .momo_adam import MomoAdam
 from .muon import Muon
 
 
+def get_optimizer_factory(name: str):
+    """
+    Returns the optimizer class corresponding to the given name.
+    """
+    name = name.lower()
+    if name == 'sgd':
+        return torch.optim.SGD
+    elif name == 'adam':
+        return torch.optim.Adam
+    elif name == 'adamw':
+        return torch.optim.AdamW
+    elif name == 'momo':
+        return Momo
+    elif name == 'momo-adam':
+        return MomoAdam
+    elif name == 'muon':
+        return Muon
+    else:
+        raise ValueError(f"Unknown optimizer name: {name}")
+
+
 def get_optimizer(opt_config: dict, lr = 1e-3) -> Tuple[torch.optim.Optimizer, dict]:
     """
     Main function mapping opt configs to an instance of torch.optim.Optimizer and a dict of hyperparameter arguments (lr, weight_decay,..).  
@@ -113,7 +134,7 @@ def get_optimizer(opt_config: dict, lr = 1e-3) -> Tuple[torch.optim.Optimizer, d
     elif name == 'muon-you':
         opt_obj = Muon
         hyperp = {'lr': lr,
-                  'wd': opt_config.get('weight_decay', 0),
+                  'weight_decay': opt_config.get('weight_decay', 0),
                   'adamw_betas': opt_config.get('betas', (0.95, 0.95)),
                   'momentum': opt_config.get('momentum', 0.95),
                   'nesterov': True,
@@ -126,7 +147,7 @@ def get_optimizer(opt_config: dict, lr = 1e-3) -> Tuple[torch.optim.Optimizer, d
     elif name == 'muon-jordan':
         opt_obj = Muon
         hyperp = {'lr': lr,
-                  'wd': opt_config.get('weight_decay', 0),
+                  'weight_decay': opt_config.get('weight_decay', 0),
                   'adamw_betas': opt_config.get('betas', (0.95, 0.95)),
                   'momentum': opt_config.get('momentum', 0.95),
                   'nesterov': True,
@@ -139,7 +160,7 @@ def get_optimizer(opt_config: dict, lr = 1e-3) -> Tuple[torch.optim.Optimizer, d
     elif name == 'muon-polarexpress':
         opt_obj = Muon
         hyperp = {'lr': lr,
-                  'wd': opt_config.get('weight_decay', 0),
+                  'weight_decay': opt_config.get('weight_decay', 0),
                   'adamw_betas': opt_config.get('betas', (0.95, 0.95)),
                   'momentum': opt_config.get('momentum', 0.95),
                   'nesterov': True,
@@ -159,7 +180,7 @@ def get_scheduler(config: dict, opt: torch.optim.Optimizer, total_iterations = N
     Main function mapping to a learning rate scheduler.
     """
     # if not specified, use constant step sizes
-    name = config.get('lr_schedule', 'constant')
+    name = config.get('name', 'constant')
     
     if name == 'constant':
         lr_fun = lambda epoch: 1 # this value is multiplied with initial lr

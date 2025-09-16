@@ -102,24 +102,22 @@ class Muon(torch.optim.Optimizer):
     def __init__(self,
                  named_params,
                  lr=1e-3,
-                 wd=0.1,
+                 weight_decay=0.1,
                  momentum=0.95,
                  nesterov=True,
                  ns_steps=5,
                  rms_scaling=True,
                  nuclear_scaling=False,
                  polar_method="Keller",
-                 polar_params=None,
                  adamw_betas=(0.95, 0.95),
                  adamw_eps=1e-8):
         """
         Arguments:
             polar_method: The name of the polar factorization method to use (e.g., "NewtonSchultz", "Keller", "Pole") where PolE = PolarExpress
-            polar_params: A dictionary of hyperparameters for the polar factorization method.
         """
         defaults = dict(
                 lr=lr,
-                wd=wd,
+                weight_decay=weight_decay,
                 momentum=momentum,
                 nesterov=nesterov,
                 ns_steps=ns_steps,
@@ -154,21 +152,16 @@ class Muon(torch.optim.Optimizer):
             self.state[p]["use_muon"] = False
 
         # Instantiate the polar factorization method
-        self.polar_factorizer = self._initialize_polar_factorizer(polar_method, polar_params)
+        self.polar_factorizer = self._initialize_polar_factorizer(polar_method)
 
-    def _initialize_polar_factorizer(self, polar_method, polar_params):
+    def _initialize_polar_factorizer(self, polar_method):
         """Initialize the polar factorization method based on the provided name and parameters."""
-        if polar_params is None:
-            polar_params = {}
-
-
         if polar_method == "Keller":
             return zeropower_via_newtonschulz5  # Use the method directly
         elif polar_method == "Jiacheng":
             return jiacheng
         elif polar_method == "polarexpress":
             return PolarExpress 
-
         else:
             raise ValueError(f"Unknown polar method: {polar_method}")
 
@@ -200,7 +193,7 @@ class Muon(torch.optim.Optimizer):
 
             params = [p for p in group["params"] if self.state[p]["use_muon"]]
             lr = group["lr"]
-            wd = group["wd"]
+            weight_decay = group["weight_decay"]
             momentum = group["momentum"]
 
             # generate weight updates in distributed fashion
@@ -237,7 +230,7 @@ class Muon(torch.optim.Optimizer):
                 )
                 
                 # apply weight decay
-                p.data.mul_(1 - lr * wd)
+                p.data.mul_(1 - lr * weight_decay)
                 
                 # apply update
                 p.data.add_(u, alpha=-adjusted_lr)
@@ -250,7 +243,7 @@ class Muon(torch.optim.Optimizer):
             lr = group['lr']
             beta1, beta2 = group["adamw_betas"]
             eps = group["adamw_eps"]
-            weight_decay = group["wd"]
+            weight_decay = group["weight_decay"]
 
             for p in params:
                 g = p.grad

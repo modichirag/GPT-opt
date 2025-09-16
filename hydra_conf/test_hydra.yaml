@@ -4,11 +4,13 @@ defaults:
 
 optimizer_params:
   name: adamw
-  lr: 0.001
-  weight_decay: 0.1
-  lr_schedule: constant-linear
+  args:
+    lr: 0.001
+    weight_decay: 0.1
+
+lr_schedule:
+  name: constant-linear
   warm_up_fraction: 0.4
-  ns_steps: 5  # this isn't used for adamw but needed for muon optimizers
 
 logging_params:
   val_tokens_processed: 16384  # 2^14
