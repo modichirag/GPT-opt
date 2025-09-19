@@ -1,5 +1,8 @@
 from itertools import chain, islice, repeat
 import torch
+import os
+import warnings
+import uuid
 
 # # How to generate these lists:
 # from itertools import islice
@@ -38,3 +41,38 @@ def PolarExpress(G: torch.Tensor, steps: int) -> torch.Tensor:
     return X
 
 
+@torch.compile
+def FastApplyPolarExpress(G: torch.Tensor, steps: int, restart_interval: int, shift_eps: float = 0) -> torch.Tensor:
+    assert G.ndim >= 2
+    X = G.double()
+    if G.size(-2) > G.size(-1): X = X.mT  # this reduces FLOPs
+    X = X / (X.norm(dim=(-2, -1), keepdim=True) * 1.02 + 1e-7)
+    hs = coeffs_list[:steps] + list( 
+        repeat(coeffs_list[-1], steps - len(coeffs_list)))
+    hs = [(a * .99, b * .99, c * .99) for (a, b, c) in hs]  # safety factor
+    I = torch.eye(X.shape[0], device=X.device, dtype=X.dtype)
+    Y = X @ X.mT + shift_eps * I  # numerical stability
+    Q = I.clone()
+    for iter, (a, b, c) in enumerate(hs):
+        if (iter % restart_interval == 0) and (iter > 0):
+            X = Q @ X
+            Y = X @ X.mT
+            Q = I.clone()
+        R = Q.mT @ Y @ Q
+        Q = Q @ (a*I + R @ (b*I + c*R))  # Q <- Q(aI + bR + cR^2)
+        # if verbose:
+        #     print("-"*20)
+        #     print(iter)
+        #     print("R", torch.linalg.eigvalsh(R.double())[:10])
+        #     print((R - R.T).norm().item())
+        #     print("Q", torch.linalg.eigvalsh(Q.double())[:10])
+        #     print((Q - Q.T).norm().item())
+        #     print(torch.linalg.norm((Q @ X).double(), ord=2).item())
+    X = Q @ X
+    if (X.norm() > 5 * I.shape[0]) or not (torch.isfinite(X).all()):
+        warnings.warn("X.norm() is unusually large. Saving G to disk.")
+        os.makedirs("bad_G", exist_ok=True)
+        filename = f"bad_G_{uuid.uuid4().hex}.pt"
+        torch.save(G, os.path.join("bad_G", filename))
+    if G.size(-2) > G.size(-1): X = X.mT
+    return X
