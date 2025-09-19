@@ -50,7 +50,7 @@ def FastApplyPolarExpress(G: torch.Tensor, steps: int, restart_interval: int, sh
     hs = coeffs_list[:steps] + list( 
         repeat(coeffs_list[-1], steps - len(coeffs_list)))
     hs = [(a * .99, b * .99, c * .99) for (a, b, c) in hs]  # safety factor
-    I = torch.eye(X.shape[0], device=X.device, dtype=X.dtype)
+    I = torch.eye(X.shape[-2], device=X.device, dtype=X.dtype)
     Y = X @ X.mT + shift_eps * I  # numerical stability
     Q = I.clone()
     for iter, (a, b, c) in enumerate(hs):
@@ -69,7 +69,7 @@ def FastApplyPolarExpress(G: torch.Tensor, steps: int, restart_interval: int, sh
         #     print((Q - Q.T).norm().item())
         #     print(torch.linalg.norm((Q @ X).double(), ord=2).item())
     X = Q @ X
-    if (X.norm() > 5 * I.shape[0]) or not (torch.isfinite(X).all()):
+    if (X.norm(dim=(-2, -1), keepdim=False) > 5 * I.shape[0]).any() or not (torch.isfinite(X).all()):
         warnings.warn("X.norm() is unusually large. Saving G to disk.")
         os.makedirs("bad_G", exist_ok=True)
         filename = f"bad_G_{uuid.uuid4().hex}.pt"

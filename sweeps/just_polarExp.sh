@@ -1,4 +1,4 @@
-WANDB="+logging_params.wandb.project=polar-express +logging_params.wandb.tags=\"just_polarExp\""
+WANDB="+logging_params.wandb.project=polar-express" # this is broken. tags should be a list of strings: +logging_params.wandb.tags=\"just_polarExp\ 
 COMMON="+training_data=fineweb"
 MUON="optimizer_params.name=muon +optimizer_params.args.ns_steps=5"
 

@@ -4,16 +4,17 @@
 # This code snippet is a modified version adapted from the following GitHub repository:
 # https://github.com/KellerJordan/Muon/blob/master/muon.py
 import torch
+from functools import partial
 import math
 import warnings
-from gptopt.optim.polar_express import PolarExpress
+from gptopt.optim.polar_express import PolarExpress, FastApplyPolarExpress
 
 @torch.compile
 def jiacheng(G, steps):
     """
     Jiacheng optimized polynomials
     """
-    assert len(G.shape) == 2
+    assert len(G.shape) >= 2
     abc_list = [
         (3955/1024, -8306/1024, 5008/1024),
         (3735/1024, -6681/1024, 3463/1024),
@@ -24,21 +25,21 @@ def jiacheng(G, steps):
     ]
     X = G.bfloat16()
     if G.size(0) > G.size(1):
-        X = X.T
+        X = X.mT
     # Ensure spectral norm is at most 1
-    X = X / (X.norm() + 1e-7)
+    X = X / (X.norm(dim=(-2, -1), keepdim=True) + 1e-7)
     # Perform the NS iterations
     if steps > len(abc_list):
         steps = len(abc_list)
     for a, b, c in abc_list[:steps]:
-        A = X @ X.T
+        A = X @ X.mT
         B = (
             b * A + c * A @ A
         )  # adapted from suggestion by @jxbz, @leloykun, and @YouJiacheng
         X = a * X + B @ X
 
     if G.size(0) > G.size(1):
-        X = X.T
+        X = X.mT
     return X
 
 @torch.compile
@@ -52,23 +53,23 @@ def zeropower_via_newtonschulz5(G, steps):
     where S' is diagonal with S_{ii}' ~ Uniform(0.5, 1.5), which turns out not to hurt model
     performance at all relative to UV^T, where USV^T = G is the SVD.
     """
-    assert len(G.shape) == 2
+    assert len(G.shape) >= 2
     a, b, c = (3.4445, -4.7750, 2.0315) 
     X = G.bfloat16()
     if G.size(0) > G.size(1):
-        X = X.T
+        X = X.mT
     # Ensure spectral norm is at most 1
-    X = X / (X.norm() + 1e-7)
+    X = X / (X.norm(dim=(-2, -1), keepdim=True) + 1e-7)
     # Perform the NS iterations
     for _ in range(steps):
-        A = X @ X.T
+        A = X @ X.mT
         B = (
             b * A + c * A @ A
         )  # adapted from suggestion by @jxbz, @leloykun, and @YouJiacheng
         X = a * X + B @ X
 
     if G.size(0) > G.size(1):
-        X = X.T
+        X = X.mT
     return X
 
 
@@ -110,7 +111,10 @@ class Muon(torch.optim.Optimizer):
                  nuclear_scaling=False,
                  polar_method="Keller",
                  adamw_betas=(0.95, 0.95),
-                 adamw_eps=1e-8):
+                 adamw_eps=1e-8,
+                 split_heads=False,
+                 nheads=None,
+                ):
         """
         Arguments:
             polar_method: The name of the polar factorization method to use (e.g., "NewtonSchultz", "Keller", "Pole") where PolE = PolarExpress
@@ -139,14 +143,22 @@ class Muon(torch.optim.Optimizer):
                 adamw_params_names.append(name)
         params = list(muon_params)
         params.extend(adamw_params)
+        self.split_heads = split_heads
+        if self.split_heads:
+            assert nheads is not None, "nheads must be specified if split_heads is True"
+            self.nheads = nheads
         super().__init__(params, defaults)
         
         # Sort parameters into those for which we will use Muon, and those for which we will not
 # Use Muon for every parameter in muon_params which is >= 2D and doesn't look like an embedding or head layer
-        for p in muon_params:
-            assert p.ndim == 2, p.ndim
+        for p, p_name in zip(muon_params, muon_params_names):
+            if not self.split_heads: assert p.ndim == 2, p.ndim
             self.state[p]["use_muon"] = True
-                
+            if p_name.endswith("attn.c_attn.weight"):
+                self.state[p]["is_W_QKV"] = True
+            elif p_name.endswith("attn.c_proj.weight"):
+                self.state[p]["is_W_O"] = True
+
         for p in adamw_params:
             # Do not use Muon for parameters in adamw_params
             self.state[p]["use_muon"] = False
@@ -162,6 +174,8 @@ class Muon(torch.optim.Optimizer):
             return jiacheng
         elif polar_method == "polarexpress":
             return PolarExpress 
+        elif polar_method == "fast_polarexpress":
+            return partial(FastApplyPolarExpress, restart_interval=3, shift_eps=1e-3)
         else:
             raise ValueError(f"Unknown polar method: {polar_method}")
 
@@ -201,7 +215,7 @@ class Muon(torch.optim.Optimizer):
                 g = p.grad
                 if g is None:
                     continue
-                if g.ndim > 2:
+                if (g.ndim > 2) and not (self.split_heads):
                     g = g.view(g.size(0), -1)
 
                 assert g is not None
@@ -216,9 +230,30 @@ class Muon(torch.optim.Optimizer):
                     g = g.add(buf, alpha=momentum)
                 else:
                     g = buf
+
+                if self.split_heads and self.state[p].get("is_W_QKV", False):
+                    # For W_QKV, we split the gradients into 3 heads and process them separately
+                    # print("before", g.shape, self.nheads)
+                    old_shape = g.shape
+                    g = g.reshape(3 * self.nheads, g.shape[0] // (3 * self.nheads), g.shape[1])
+                    # print("after", g.shape)
+                elif self.split_heads and self.state[p].get("is_W_O", False) and self.split_heads:
+                    # print("before", g.shape, self.nheads)
+                    old_shape = g.shape
+                    g = g.reshape(g.shape[0], self.nheads, g.shape[1] // self.nheads).transpose(0, 1)
+                    # print("after", g.shape)
+                    # For W_O, we split the gradients into 3 heads and process them separately
+
                 # Use the selected polar factorization method
                 u = self.polar_factorizer(g, group["ns_steps"])
                 
+                if self.split_heads and self.state[p].get("is_W_QKV", False):
+                    g = g.reshape(old_shape)
+                    u = u.reshape(old_shape)
+                elif self.split_heads and self.state[p].get("is_W_O", False):
+                    g = g.transpose(0, 1).reshape(old_shape)
+                    u = u.transpose(0, 1).reshape(old_shape)
+
                 # scale update
                 adjusted_lr = self.adjust_lr_for_muon(
                     lr,

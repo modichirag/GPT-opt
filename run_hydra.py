@@ -44,7 +44,6 @@ def main(config : DictConfig):
 
     # Load model
     model = load_model(config['gpt_model'], device)
-        
     # Set the training parameters
     training_params = config['training_data']['training_params']
     opt_config = config["optimizer_params"]
@@ -84,7 +83,7 @@ def main(config : DictConfig):
 
     # Setup optimizer
     optimizer_obj = get_optimizer_factory(opt_config['name'])
-    optimizer = optimizer_obj(model_copy.named_parameters(), **opt_config['args'])
+    optimizer = optimizer_obj(model_copy.named_parameters(), **opt_config['args'], nheads=config['gpt_model'].get('n_head', None))
     scheduler = get_scheduler(config['lr_schedule'], optimizer, total_iterations=total_iterations)
 
     # Initialize wandb
