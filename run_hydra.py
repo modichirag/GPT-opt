@@ -13,6 +13,7 @@ import wandb
 import hydra
 from hydra.core.hydra_config import HydraConfig
 from omegaconf import DictConfig, OmegaConf
+import uuid
 
 
 @hydra.main(version_base=None, config_path="hydra_conf")
@@ -32,15 +33,13 @@ def main(config : DictConfig):
     print(f"Using device: {device}")
 
     # Logging
-    outputname = HydraConfig.get().job.config_name
-    output_dir = config['logging_params'].get('results_dir', f"outputs/hydra-results/{outputname}")
-    CKPT_DIR = config['logging_params']['ckpt_dir']
-    ckpt_dir_base = CKPT_DIR + f"/{outputname}/" if CKPT_DIR != "" else ""
+    output_dir = HydraConfig.get().runtime.output_dir
+    ckpt_dir = f"{output_dir}/checkpoints/" if config['logging_params'].get('save_checkpoint', False) else ""
     if master_process:
-        print(f"Loading configuration from {outputname}")
+        print(f"Loading configuration from {HydraConfig.get().job.config_name}")
         print(f"Training on dataset {config['training_data']['dataset']['name']}")
         os.makedirs(output_dir, exist_ok=True)  
-        if CKPT_DIR != "": os.makedirs(ckpt_dir_base, exist_ok=True)
+        if ckpt_dir != "": os.makedirs(ckpt_dir, exist_ok=True)
 
     # Load model
     model = load_model(config['gpt_model'], device)
@@ -65,13 +64,13 @@ def main(config : DictConfig):
     print()
     if master_process:
         print(f"Training with optimizer {opt_config['name']} and learning rate {opt_config['args']['lr']}")
-        
+
     # Generate hash for the current optimizer configuration
-    config_hash = hash_config(opt_config, training_params, config['gpt_model'])
-    file_name = f"{opt_config['name']}-lr-{opt_config['args']['lr']}-{config['lr_schedule']['name']}-{config_hash}-world{world_size}"
-    output_path = os.path.join(output_dir, file_name + '.json')
-    ckpt_dir = os.path.join(ckpt_dir_base, file_name) + '/' if CKPT_DIR != "" else ""
-    
+    # config_hash = hash_config(opt_config, training_params, config['gpt_model'])
+    random_job_id = str(uuid.uuid4()).split('-')[0]
+    file_name = f"logs_jobid_{random_job_id}.json"
+    output_path = os.path.join(output_dir, file_name)
+
     # copy model to ensure consistency
     model_copy = copy.deepcopy(model).to(device)
     if training_params['compile']:
@@ -83,7 +82,9 @@ def main(config : DictConfig):
 
     # Setup optimizer
     optimizer_obj = get_optimizer_factory(opt_config['name'])
-    optimizer = optimizer_obj(model_copy.named_parameters(), **opt_config['args'], nheads=config['gpt_model'].get('n_head', None))
+    opt_config_args = opt_config['args']
+    if opt_config['name'] in ['muon']: opt_config_args['nheads'] = config['gpt_model'].get('n_head', None)
+    optimizer = optimizer_obj(model_copy.named_parameters(), **opt_config_args)
     scheduler = get_scheduler(config['lr_schedule'], optimizer, total_iterations=total_iterations)
 
     # Initialize wandb
@@ -91,9 +92,11 @@ def main(config : DictConfig):
         config_for_wandb_logging = dict(**config, world_size=world_size)
         wandb_config = config['logging_params']['wandb']
         if "dir" not in wandb_config:
-            wandb_config['dir'] = f"{config['logging_params']['results_dir']}/../../wandb"
+            wandb_config['dir'] = "./outputs/wandb"
         wandb_run = wandb.init(
             **wandb_config,
+            id=random_job_id,
+            tags=wandb_config.get('tags', []) + [str(HydraConfig.get().job.name)],
             config=config_for_wandb_logging,
             reinit='create_new',
         )

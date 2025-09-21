@@ -1,5 +1,5 @@
-WANDB="+logging_params.wandb.project=polar-express" # this is broken. tags should be a list of strings: +logging_params.wandb.tags=\"just_polarExp\ 
-COMMON="+training_data=fineweb"
+WANDB="+logging_params.wandb.project=polar-express" 
+COMMON="+training_data=fineweb hydra.job.name=\"just_polarexp\""
 MUON="optimizer_params.name=muon +optimizer_params.args.ns_steps=5"
 
 for lr in 0.001 0.003 0.005 0.01 0.03 0.05; do

@@ -1,0 +1,5 @@
+n_embd: 1280    
+n_layer: 36   
+n_head: 20    
+vocab_size: 50257
+flash_attention: True

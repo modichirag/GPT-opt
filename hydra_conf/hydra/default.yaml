@@ -1,0 +1,6 @@
+# output directory, generated dynamically on each run
+run:
+  dir: outputs/hydra-results/${hydra.job.name}/${now:%Y-%m-%d}/${now:%H-%M-%S.%f}
+
+job:
+  name: default_job

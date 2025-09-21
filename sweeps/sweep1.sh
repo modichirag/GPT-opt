@@ -1,5 +1,5 @@
 WANDB="+logging_params.wandb.project=polar-express"
-COMMON="+training_data=fineweb"
+COMMON="+training_data=fineweb hydra.job.name=\"main_run\""
 MUON="optimizer_params.name=muon +optimizer_params.args.ns_steps=5"
 
 for lr in 0.0005 0.001 0.005 0.01 0.02; do
