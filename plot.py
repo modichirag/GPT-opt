@@ -1,9 +1,10 @@
+from functools import reduce
 import yaml
 import argparse
 import matplotlib.pyplot as plt
 from matplotlib.ticker import ScalarFormatter
 from gptopt.utils import get_default_config, load_config
-from gptopt.plot_utils import get_alpha_from_lr, plot_data, plot_step_size_and_lr, smoothen_dict
+from gptopt.plot_utils import get_alpha_from_lr, plot_data, plot_step_size_and_lr, smoothen_dict, get_lr_and_name
 import copy
 import json
 import os
@@ -26,6 +27,19 @@ def load_outputs(output_dir):
                 outputs.append(output)
     return outputs
 
+def load_output_folder(experiment_results_folder):
+    outputs = []
+    for root, _, files in os.walk(experiment_results_folder):
+        for file_name in files:
+            if file_name.startswith("logs") and file_name.endswith(".json"):
+                file_path = os.path.join(root, file_name)
+                with open(file_path, 'r') as file:
+                    logs = json.load(file)
+                with open(os.path.join(root, ".hydra/config.yaml"), 'r') as file:
+                    config = yaml.safe_load(file)
+                outputs.append(dict(config=config, logs=logs))
+    return outputs
+
 def plot_final_loss_vs_lr(outputs, colormap, outfilename, linestylemap,  val=False):
     """Plot final loss versus learning rate as lines for each method."""
     fig, ax = plt.subplots(figsize=(6, 4))
@@ -33,14 +47,14 @@ def plot_final_loss_vs_lr(outputs, colormap, outfilename, linestylemap,  val=Fal
 
     # Group final losses and learning rates by method
     for output in outputs:
-        name, lr = output['name'].split('-lr-')
+        name, lr = get_lr_and_name(output)
         lr = float(lr)
         if val:
-            if 'val_losses' not in output:
+            if 'val_losses' not in output['logs']:
                 continue
-            final_loss = output['val_losses'][-1]
+            final_loss = output['logs']['val_losses'][-1]
         else:
-            final_loss = output['losses'][-1]  # Get the final loss
+            final_loss = output['logs']['losses'][-1]  # Get the final loss
         if name not in methods:
             methods[name] = {'lrs': [], 'losses': []}
         methods[name]['lrs'].append(lr)
@@ -50,6 +64,8 @@ def plot_final_loss_vs_lr(outputs, colormap, outfilename, linestylemap,  val=Fal
     for name, data in methods.items():
         sorted_indices = sorted(range(len(data['lrs'])), key=lambda i: data['lrs'][i])  # Sort by learning rate
         sorted_lrs = [data['lrs'][i] for i in sorted_indices]
+        if len(set(sorted_lrs)) < len(sorted_lrs):
+            print(f"Warning: Duplicate learning rates found for method {name}. This may affect the line plot.")
         sorted_losses = [data['losses'][i] for i in sorted_indices]
         ax.plot(sorted_lrs, sorted_losses, alpha= 0.85, label=name, color=colormap.get(name, None), linestyle=linestylemap.get(name, None), linewidth=2)
     ax.set_xscale('log')
@@ -67,18 +83,9 @@ def plot_final_loss_vs_lr(outputs, colormap, outfilename, linestylemap,  val=Fal
     fig.subplots_adjust(top=0.95, bottom=0.15, left=0.15, right=0.95)
     fig.savefig(plotfile, format='pdf', bbox_inches='tight')
 
-def main(config_file=None):
-    default_config = get_default_config()
-    if config_file:
-        config = load_config(default_config, config_file)
-    outfilename = config_file.replace("configs/", "").replace('.yaml', '')
-    output_dir = f"{config['logging_params']['results_dir']}/{outfilename}"
-    outputs = load_outputs(output_dir)
-
-    print(f"Loaded {len(outputs)} outputs from {output_dir}")
-
+def main(outputs, outfilename):
     for output in outputs:  # Smoothing
-        smoothen_dict(output, num_points=100, beta =0.05)
+        smoothen_dict(output['logs'], num_points=100, beta =0.05)
 
 
     colormap = {'sgd-m': '#B3CBB9',
@@ -88,8 +95,8 @@ def main(config_file=None):
                 'adam-sch': '#FF6B35',
                 'momo': '#61ACE5',
                 'muon-polarexpress': 'k',
-                'muon-you': '#8A2BE2',  # Added a new color for "muon" (blue-violet)
-                'muon-jordan': '#FF0000',
+                'muon-You': '#8A2BE2',  # Added a new color for "muon" (blue-violet)
+                'muon-Jordan': '#FF0000',
     }
     linestylemap = {'momo': None,
                     'sgd-m': None,
@@ -98,15 +105,14 @@ def main(config_file=None):
                     'adam': None,
                     'adamw': None,
                     'adam-sch': '--',
-                    'muon-you': ':',
-                    'muon-jordan': '-.',
+                    'muon-You': ':',
+                    'muon-Jordan': '-.',
     }
 
     # Collect learning rate ranges for each method
     lr_ranges = {}
     for output in outputs:
-        name, lr = output['name'].split('-lr-')
-        lr = float(lr)
+        name, lr = get_lr_and_name(output)
         if name not in lr_ranges:
             lr_ranges[name] = [lr, lr]
         else:
@@ -121,17 +127,17 @@ def main(config_file=None):
     best_outputs = {}
     best_lr = {}
     for output in outputs:
-        name, lr = output['name'].split('-lr-')
-        if 'val_losses' not in output:
+        name, lr = get_lr_and_name(output)
+        if 'val_losses' not in output['logs']:
             continue
-        final_val_loss = output['val_losses'][-1]
-        if name not in best_outputs or final_val_loss < best_outputs[name]['val_losses'][-1]:
+        final_val_loss = output['logs']['val_losses'][-1]
+        if name not in best_outputs or final_val_loss < best_outputs[name]['logs']['val_losses'][-1]:
             best_outputs[name] = output
             lr = float(lr)
             best_lr[name] = [lr, lr] 
     os.makedirs("figures", exist_ok=True)
     for name, output in best_outputs.items():
-        print(f"Best {name}-{best_lr[name][0]} final val loss: {output['val_losses'][-1]}")
+        print(f"Best {name}-{best_lr[name][0]} final val loss: {output['logs']['val_losses'][-1]}")
     # print(f"Best {name} lr: {lr}")
     # Plot final loss vs learning rate
     plot_final_loss_vs_lr(outputs, colormap, outfilename, linestylemap)
@@ -139,11 +145,11 @@ def main(config_file=None):
     # Plot loss
     selected_outputs = list(best_outputs.values())
     get_alpha_from_lr = lambda lr, lr_range: 0.85
-    initial_loss = selected_outputs[0]['val_losses'][0] if selected_outputs and 'val_losses' in selected_outputs[0] else 1.0  # Default to 1.0 if not available
+    initial_loss = selected_outputs[0]['logs']['val_losses'][0] if selected_outputs and 'val_losses' in selected_outputs[0]['logs'] else 1.0  # Default to 1.0 if not available
     upper_bound = initial_loss*1.0  # Set upper bound to 70% above the initial loss
     fig, ax = plt.subplots(figsize=(4, 3))
-    plot_data(ax, selected_outputs, config['training_params']['num_epochs'], 'val_losses', 'Validation Loss', colormap, linestylemap, best_lr, get_alpha_from_lr)
-    lower_bound = min(min(output['val_losses']) for output in selected_outputs if 'val_losses' in output)
+    plot_data(ax, selected_outputs, output['config']['training_data']['training_params']['num_epochs'], 'val_losses', 'Validation Loss', colormap, linestylemap, best_lr, get_alpha_from_lr)
+    lower_bound = min(min(output['logs']['val_losses']) for output in selected_outputs if 'val_losses' in output['logs'])
     ax.set_ylim(lower_bound*0.975, upper_bound) 
     ax.tick_params(axis='both', which='major', labelsize=8)  # Set tick label font size
     ax.set_xlabel('Epoch', fontsize=10)  # Set x-axis label font size
@@ -157,7 +163,7 @@ def main(config_file=None):
     fig.savefig('figures/' + outfilename + '.pdf', format='pdf', bbox_inches='tight')
 
     fig, ax = plt.subplots(figsize=(4, 3))
-    plot_data(ax, selected_outputs, config['training_params']['num_epochs'], 'losses', 'Loss', colormap, linestylemap, best_lr, get_alpha_from_lr, time = True)
+    plot_data(ax, selected_outputs, output['config']['training_data']['training_params']['num_epochs'], 'losses', 'Loss', colormap, linestylemap, best_lr, get_alpha_from_lr, time = True)
     ax.set_ylim(lower_bound*0.975, upper_bound)  # Set the upper bound
     ax.tick_params(axis='both', which='major', labelsize=8)  # Set tick label font size
     ax.set_xlabel('Time (s)', fontsize=10)  # Set x-axis label font size
@@ -203,15 +209,14 @@ def main(config_file=None):
     # fig.savefig('figures/step_size-' + outfilename + '.pdf', format='pdf', bbox_inches='tight')
 
 if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description='Plotting gpt_distill outputs.')
-    parser.add_argument('--config', type=str, nargs='?', help='Path to config file', default=None)
+    # parser = argparse.ArgumentParser(description='Plotting gpt_distill outputs.')
+    # parser.add_argument('--results_folder', type=str, nargs='?', help='Path to results folder', default=None)
 
-    args = parser.parse_args()
-    if args.config:
-        print(f"Loading configuration from {args.config}")
-    else:
-        print("No config file provided, using default settings.")
-    main(args.config)
+    results_folder = "outputs/hydra-results/main_run"
+    outputs = load_output_folder("outputs/hydra-results/main_run")
 
-
-
+    for weight_decay in set(output['config']['optimizer_params']['args']['weight_decay'] for output in outputs):
+        small_outputs = [output for output in outputs if output['config']['optimizer_params']['args']['weight_decay'] == weight_decay]
+        outfilename = os.path.basename(results_folder.rstrip('/')) + "-wd-" + str(weight_decay)
+        print(f"Loaded {len(outputs)} outputs from {results_folder}")
+        main(small_outputs, outfilename)

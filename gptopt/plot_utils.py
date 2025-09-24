@@ -12,13 +12,23 @@ def percentage_of_epoch(output, field, num_epochs):
     percentages = [i / total_iterations * num_epochs for i in range(total_iterations)]
     return percentages
 
-
+def get_lr_and_name(output):
+    lr = float(output['config']['optimizer_params']['args']['lr'])
+    alg_name = output['config']['optimizer_params']['name']
+    if alg_name == 'muon':
+        polar_method = output['config']['optimizer_params']['args']['polar_method']
+        translate = {"Keller": "Jordan", "Jiacheng": "You"}
+        if polar_method in translate: polar_method = translate[polar_method]
+        name = f"muon-{polar_method}"
+    else:
+        name = str(alg_name)
+    return name, lr
 
 def plot_data(ax, outputs, num_epochs, field, ylabel, colormap, linestylemap, lr_ranges, alpha_func, zorder_func=None, time=False):
     """Generalized function to plot data."""
     plotted_methods = set()
     for output in outputs:
-        name, lr = output['name'].split('-lr-')
+        name, lr = get_lr_and_name(output)
         lr = float(lr)
         alpha = alpha_func(lr, lr_range=lr_ranges[name])
 
@@ -32,11 +42,11 @@ def plot_data(ax, outputs, num_epochs, field, ylabel, colormap, linestylemap, lr
         zorder = zorder_func(name) if zorder_func else 1
         scale = 1
         if time:
-            scale = np.sum(output['step_times'])
-        x_values = percentage_of_epoch(output, field, num_epochs=num_epochs)
+            scale = np.sum(output['logs']['step_times'])
+        x_values = percentage_of_epoch(output['logs'], field, num_epochs=num_epochs)
         x_values = [x * scale for x in x_values]
         ax.plot(x_values,
-                output[field],
+                output['logs'][field],
                 label=label,
                 color=colormap.get(name),
                 linewidth=2,
@@ -55,10 +65,10 @@ def plot_step_size_and_lr(ax, outputs, colormap, linestylemap, lr_ranges, alpha_
         """Generalized function to plot step_size_list and learning_rates."""
         plotted_methods = set()
         for output in outputs:
-            if 'step_size_list' not in output or 'learning_rates' not in output:
+            if 'step_size_list' not in output['logs'] or 'learning_rates' not in output['logs']:
                 continue
 
-            name, lr = output['name'].split('-lr-')
+            name, lr = get_lr_and_name(output)
             lr = float(lr)
             alpha = alpha_func(lr, lr_range=lr_ranges[name])
 
@@ -69,16 +79,16 @@ def plot_step_size_and_lr(ax, outputs, colormap, linestylemap, lr_ranges, alpha_
                 else:
                     label = f"{name} lr in [{lr_ranges[name][0]:.1e}, {lr_ranges[name][1]:.1e}]"
 
-            ax.plot(range(len(output['step_size_list'])),
-                    output['step_size_list'],
+            ax.plot(range(len(output['logs']['step_size_list'])),
+                    output['logs']['step_size_list'],
                     label=label,
                     color=colormap[name],
                     linewidth=2,
                     linestyle=linestylemap[name],
                     alpha=alpha)
 
-            ax.plot(range(len(output['learning_rates'])),
-                    output['learning_rates'],
+            ax.plot(range(len(output['logs']['learning_rates'])),
+                    output['logs']['learning_rates'],
                     color=colormap[name],
                     linewidth=1.5,
                     linestyle='--',
