@@ -40,7 +40,7 @@ def load_output_folder(experiment_results_folder):
                 outputs.append(dict(config=config, logs=logs))
     return outputs
 
-def plot_final_loss_vs_lr(outputs, colormap, outfilename, linestylemap,  val=False):
+def plot_final_loss_vs_lr(outputs, colormap, outfilename, linestylemap, val=False, y_top_lim=None):
     """Plot final loss versus learning rate as lines for each method."""
     fig, ax = plt.subplots(figsize=(6, 4))
     methods = {}
@@ -78,12 +78,14 @@ def plot_final_loss_vs_lr(outputs, colormap, outfilename, linestylemap,  val=Fal
         plotfile = 'figures/' + outfilename + '-lr-sens' + '.pdf'
     ax.legend(loc='upper right', fontsize=10)
     ax.grid(axis='both', lw=0.2, ls='--', zorder=0)
+    if y_top_lim is not None:
+        ax.set_ylim(bottom=3.35, top=y_top_lim)
     # ax.set_ylim(bottom=3.0, top=4.5)
     # ax.set_xlim(0.0003, 0.05)
     fig.subplots_adjust(top=0.95, bottom=0.15, left=0.15, right=0.95)
     fig.savefig(plotfile, format='pdf', bbox_inches='tight')
 
-def main(outputs, outfilename):
+def main(outputs, outfilename, y_top_lim_lrs=None, y_top_vs_time=None):
     for output in outputs:  # Smoothing
         smoothen_dict(output['logs'], num_points=100, beta =0.05)
 
@@ -140,17 +142,19 @@ def main(outputs, outfilename):
         print(f"Best {name}-{best_lr[name][0]} final val loss: {output['logs']['val_losses'][-1]}")
     # print(f"Best {name} lr: {lr}")
     # Plot final loss vs learning rate
-    plot_final_loss_vs_lr(outputs, colormap, outfilename, linestylemap)
-    plot_final_loss_vs_lr(outputs, colormap, outfilename, linestylemap, val=True)
+    plot_final_loss_vs_lr(outputs, colormap, outfilename, linestylemap, y_top_lim=y_top_lim_lrs)
+    plot_final_loss_vs_lr(outputs, colormap, outfilename, linestylemap, val=True, y_top_lim=y_top_lim_lrs)
     # Plot loss
     selected_outputs = list(best_outputs.values())
     get_alpha_from_lr = lambda lr, lr_range: 0.85
     initial_loss = selected_outputs[0]['logs']['val_losses'][0] if selected_outputs and 'val_losses' in selected_outputs[0]['logs'] else 1.0  # Default to 1.0 if not available
     upper_bound = initial_loss*1.0  # Set upper bound to 70% above the initial loss
     fig, ax = plt.subplots(figsize=(4, 3))
-    plot_data(ax, selected_outputs, output['config']['training_data']['training_params']['num_epochs'], 'val_losses', 'Validation Loss', colormap, linestylemap, best_lr, get_alpha_from_lr)
+    plot_data(ax, selected_outputs, max(o['config']['training_data']['training_params']['num_epochs'] for o in selected_outputs), 'val_losses', 'Validation Loss', colormap, linestylemap, best_lr, get_alpha_from_lr)
     lower_bound = min(min(output['logs']['val_losses']) for output in selected_outputs if 'val_losses' in output['logs'])
     ax.set_ylim(lower_bound*0.975, upper_bound) 
+    if y_top_vs_time is not None:
+        ax.set_ylim(top=y_top_vs_time)
     ax.tick_params(axis='both', which='major', labelsize=8)  # Set tick label font size
     ax.set_xlabel('Epoch', fontsize=10)  # Set x-axis label font size
     ax.set_ylabel('Validation Loss', fontsize=10) 
@@ -163,8 +167,10 @@ def main(outputs, outfilename):
     fig.savefig('figures/' + outfilename + '.pdf', format='pdf', bbox_inches='tight')
 
     fig, ax = plt.subplots(figsize=(4, 3))
-    plot_data(ax, selected_outputs, output['config']['training_data']['training_params']['num_epochs'], 'losses', 'Loss', colormap, linestylemap, best_lr, get_alpha_from_lr, time = True)
+    plot_data(ax, selected_outputs, max(o['config']['training_data']['training_params']['num_epochs'] for o in selected_outputs), 'losses', 'Loss', colormap, linestylemap, best_lr, get_alpha_from_lr, time = True)
     ax.set_ylim(lower_bound*0.975, upper_bound)  # Set the upper bound
+    if y_top_vs_time is not None:
+        ax.set_ylim(top=y_top_vs_time)
     ax.tick_params(axis='both', which='major', labelsize=8)  # Set tick label font size
     ax.set_xlabel('Time (s)', fontsize=10)  # Set x-axis label font size
     ax.set_ylabel('Validation Loss', fontsize=10) 
@@ -216,7 +222,16 @@ if __name__ == "__main__":
     outputs = load_output_folder("outputs/hydra-results/main_run")
 
     for weight_decay in set(output['config']['optimizer_params']['args']['weight_decay'] for output in outputs):
-        small_outputs = [output for output in outputs if output['config']['optimizer_params']['args']['weight_decay'] == weight_decay]
-        outfilename = os.path.basename(results_folder.rstrip('/')) + "-wd-" + str(weight_decay)
-        print(f"Loaded {len(outputs)} outputs from {results_folder}")
-        main(small_outputs, outfilename)
+        small_outputs = [
+            output for output in outputs 
+            if output['config']['optimizer_params']['args']['weight_decay'] == weight_decay
+        ]
+        for nlayer in set(output['config']['gpt_model']['n_layer'] for output in small_outputs):
+            smaller_outputs = [
+                output for output in small_outputs 
+                if output['config']['gpt_model']['n_layer'] == nlayer
+            ]
+            assert len(small_outputs) > 0
+            outfilename = os.path.basename(results_folder.rstrip('/')) + f"-nl-{nlayer}" + "-wd-" + str(weight_decay)
+            print(f"Loaded {len(smaller_outputs)} outputs from {results_folder}")
+            main(smaller_outputs, outfilename, y_top_lim_lrs=3.7, y_top_vs_time=4.5)
