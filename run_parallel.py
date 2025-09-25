@@ -18,7 +18,7 @@ get_launch_script = lambda name: f"""#!/bin/bash
 #SBATCH --constraint=h100
 #SBATCH --gpus-per-task=1
 #SBATCH --cpus-per-task=2
-#SBATCH --time=12:00:00
+#SBATCH --time=1-00:00:00
 #SBATCH -o {LOG_DIR}/{name}.log
 
 export OMP_NUM_THREADS=1
@@ -74,14 +74,14 @@ def run_parallel(configs: Dict[str, Dict]):
         time.sleep(10)
         still_running = []
         for job_id in job_ids:
-            cmd = "squeue -h -j {job_id}"
+            cmd = f"squeue -h -j {job_id}"
             squeue = subprocess.run(
                 cmd.split(),
                 stdout=subprocess.PIPE,
                 stderr=subprocess.PIPE,
                 text=True,
             )
-            if job_id not in squeue.stdout:
+            if job_id in squeue.stdout:
                 still_running.append(job_id)
         job_ids = list(still_running)
 

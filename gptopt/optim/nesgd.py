@@ -30,7 +30,7 @@ class SpectralNorm:
         if self.nuc_approx is None or (self.nuc_approx == "past" and "past_nuc" not in state):
             # If G = UDV^T, then nuc(G) = tr(G @ UV^T).
             u = PolarExpress(g, steps=self.ns_steps)
-            nuc = torch.trace(g.bfloat16().T @ u)
+            nuc = (g.bfloat16() * u).sum()
         elif self.nuc_approx == "fro":
             nuc = torch.linalg.matrix_norm(g, ord="fro")
         elif self.nuc_approx == "past":
@@ -375,7 +375,7 @@ class NESGD(torch.optim.Optimizer):
                     if "past_nuc" not in state:
                         state["past_nuc"] = torch.zeros(1, device=p.device)
                     # If G = UDV^T, then nuc(G) = tr(G @ UV^T).
-                    state["past_nuc"] = torch.trace(pre_lmo.bfloat16().T @ post_lmo)
+                    state["past_nuc"] = (pre_lmo.bfloat16() * post_lmo).sum()
 
                 # Apply layer-wise scaling to lr.
                 lr_scale = lr_scalings[p]
