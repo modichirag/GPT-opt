@@ -12,7 +12,7 @@ def percentage_of_epoch(output, field, num_epochs):
     percentages = [i / total_iterations * num_epochs for i in range(total_iterations)]
     return percentages
 
-def plot_data(ax, outputs, num_epochs, field, ylabel, colormap, linestylemap, lr_ranges, alpha_func, zorder_func=None, wallclock=False):
+def plot_data(ax, outputs, num_epochs, field, ylabel, lr_ranges, alpha_func, zorder_func=None, wallclock=False):
     """Generalized function to plot data."""
     plotted_methods = set()
     for output in outputs:
@@ -41,9 +41,7 @@ def plot_data(ax, outputs, num_epochs, field, ylabel, colormap, linestylemap, lr
         ax.plot(xs,
                 output[field],
                 label=label,
-                color=colormap[name],
                 linewidth=2,
-                linestyle=linestylemap[name],
                 alpha=alpha,
                 zorder=zorder)
         plotted_methods.add(name)
@@ -53,7 +51,7 @@ def plot_data(ax, outputs, num_epochs, field, ylabel, colormap, linestylemap, lr
     ax.set_ylabel(ylabel)
     ax.grid(axis='both', lw=0.2, ls='--', zorder=0)
 
-def plot_step_size_and_lr(ax, outputs, colormap, linestylemap, lr_ranges, alpha_func):
+def plot_step_size_and_lr(ax, outputs, lr_ranges, alpha_func):
         """Generalized function to plot step_size_list and learning_rates."""
         plotted_methods = set()
         for output in outputs:
@@ -74,14 +72,11 @@ def plot_step_size_and_lr(ax, outputs, colormap, linestylemap, lr_ranges, alpha_
             ax.plot(range(len(output['step_size_list'])),
                     output['step_size_list'],
                     label=label,
-                    color=colormap[name],
                     linewidth=2,
-                    linestyle=linestylemap[name],
                     alpha=alpha)
 
             ax.plot(range(len(output['learning_rates'])),
                     output['learning_rates'],
-                    color=colormap[name],
                     linewidth=1.5,
                     linestyle='--',
                     alpha=alpha)

@@ -27,7 +27,7 @@ def load_outputs(output_dir):
     return outputs
 
 
-def plot_final_loss_vs_lr(outputs, colormap, outfilename, val=False):
+def plot_final_loss_vs_lr(outputs, outfilename, val=False):
     """Plot final loss versus learning rate as lines for each method."""
     fig, ax = plt.subplots(figsize=(6, 4))
     methods = {}
@@ -54,7 +54,7 @@ def plot_final_loss_vs_lr(outputs, colormap, outfilename, val=False):
         sorted_indices = sorted(range(len(data['lrs'])), key=lambda i: data['lrs'][i])  # Sort by learning rate
         sorted_lrs = [data['lrs'][i] for i in sorted_indices]
         sorted_losses = [data['losses'][i] for i in sorted_indices]
-        ax.plot(sorted_lrs, sorted_losses, label=name, color=colormap[name], linewidth=2)
+        ax.plot(sorted_lrs, sorted_losses, label=name, linewidth=2)
         current_ub = np.max(sorted_losses)
         if current_ub > upper_bound:
             upper_bound = current_ub
@@ -76,7 +76,7 @@ def plot_final_loss_vs_lr(outputs, colormap, outfilename, val=False):
     fig.savefig(plotfile, format='pdf', bbox_inches='tight')
 
 
-def plot_tuned_curves(outputs, colormap, linestylemap, outfilename, num_epochs, wallclock=False, val=False):
+def plot_tuned_curves(outputs, outfilename, num_epochs, wallclock=False, val=False):
     """Plot loss curves of tuned methods."""
     fig, ax = plt.subplots(figsize=(6, 4))
     tuned_methods = {}
@@ -98,7 +98,7 @@ def plot_tuned_curves(outputs, colormap, linestylemap, outfilename, num_epochs, 
     # Plot loss of tuned methods.
     tuned_outputs = [tuned_methods[name]['outputs'] for name in tuned_methods]
     lr_ranges = {name: [tuned_methods[name]['best_lr']] * 2 for name in tuned_methods}
-    plot_data(ax, tuned_outputs, num_epochs, field, 'Loss', colormap, linestylemap, lr_ranges, get_alpha_from_lr, wallclock=wallclock)
+    plot_data(ax, tuned_outputs, num_epochs, field, 'Loss', lr_ranges, get_alpha_from_lr, wallclock=wallclock)
     upper_bound = np.max([output[field][round(0.2 * len(output[field]))] for output in tuned_outputs])
     upper_bound = min(upper_bound, 10.0) if not np.isnan(upper_bound) else 10.0
     ax.legend(loc='upper right', fontsize=10)
@@ -125,63 +125,6 @@ def main(config_file=None):
     for output in outputs:  # Smoothing
         smoothen_dict(output, num_points=None, beta =0.05)
 
-    colormap = {'sgd-m': '#B3CBB9',
-                'sgd-sch': '#B3CBB9',
-                'adam': '#FF6B35',
-                'adamw': '#FF6B35',
-                'adam-sch': '#FF6B35',
-                'momo': '#61ACE5',
-                'momo-adam': '#00518F',
-                'teacher': 'k',
-                'muon': '#8A2BE2',  # Added a new color for "muon" (blue-violet)
-                'muon-nonlmo': '#EAA221',
-                'muon-nonlmo-fro_approx': '#000000',
-                'muon-nonlmo-nuc_fro': '#000000',
-                'muon-nonlmo-nuc_past': '#808080',
-                'muon-l2_prod': '#008000',
-                'muon-nonlmo-l2_prod': '#FF0000',
-                'muon-rms': '#7FFFD4',
-                'muon-nonlmo-rms': '#BE6400',
-                'muon-l2_prod-rms': '#FF00FF',
-                'muon-nonlmo-l2_prod-rms': '#FFD700',
-                'muon-nonlmo-momo': '#61ACE5',
-                'muon-nonlmo-nuc_past-momo': '#00518F',
-                'sign-gd': '#61ACE5',
-                'sign-gd-nonlmo': '#00518F',
-                'nesgd-adam_infty-lmo': '#7FFFD4',
-                'nesgd-adam_2-hybrid_prod': '#61ACE5',
-                'nesgd-adam_2-l2_prod': '#BE6400',
-                'nesgd-lmo': '#FF00FF',
-    }
-    linestylemap = {'momo': None,
-                    'sgd-m': None,
-                    'sgd-sch': '--',
-                    'teacher': '--',
-                    'momo-adam': None,
-                    'adam': None,
-                    'adamw': None,
-                    'adam-sch': '--',
-                    'muon': None,
-                    'muon-nonlmo': None,
-                    'muon-nonlmo-fro_approx': None,
-                    'muon-nonlmo-nuc_fro': None,
-                    'muon-nonlmo-nuc_past': None,
-                    'muon-l2_prod': None,
-                    'muon-nonlmo-l2_prod': None,
-                    'muon-rms': None,
-                    'muon-nonlmo-rms': None,
-                    'muon-l2_prod-rms': None,
-                    'muon-nonlmo-l2_prod-rms': None,
-                    'muon-nonlmo-momo': None,
-                    'muon-nonlmo-nuc_past-momo': None,
-                    'sign-gd': None,
-                    'sign-gd-nonlmo': None,
-                    'nesgd-adam_infty-lmo': None,
-                    'nesgd-adam_2-hybrid_prod': None,
-                    'nesgd-adam_2-l2_prod': None,
-                    'nesgd-lmo': None,
-    }
-
     # Collect learning rate ranges for each method
     lr_ranges = {}
     for output in outputs:
@@ -199,14 +142,14 @@ def main(config_file=None):
     mpl.rcParams.update(mpl.rcParamsDefault)
 
     # Plot final loss vs learning rate
-    plot_final_loss_vs_lr(outputs, colormap, outfilename)
-    plot_final_loss_vs_lr(outputs, colormap, outfilename, val=True)
+    plot_final_loss_vs_lr(outputs, outfilename)
+    plot_final_loss_vs_lr(outputs, outfilename, val=True)
 
     # Plot loss
     initial_loss = outputs[0]['losses'][0] if outputs and 'losses' in outputs[0] else 1.0  # Default to 1.0 if not available
     upper_bound = initial_loss * 1.2  # Set upper bound to 20% above the initial loss
     fig, ax = plt.subplots(figsize=(4, 3))
-    plot_data(ax, outputs,  config['training_params']['num_epochs'], 'losses', 'Loss', colormap, linestylemap, lr_ranges, get_alpha_from_lr)
+    plot_data(ax, outputs,  config['training_params']['num_epochs'], 'losses', 'Loss', lr_ranges, get_alpha_from_lr)
     lower_bound = min(min(output['losses']) for output in outputs if 'losses' in output)
     ax.set_ylim(lower_bound, upper_bound) # Set the upper bound
     ax.legend(loc='upper right', fontsize=10)
@@ -218,7 +161,7 @@ def main(config_file=None):
     for method_subset in [['sgd-m', 'sgd-sch', 'momo'], ['adam', 'adam-sch', 'momo-adam']]:
         fig, ax = plt.subplots(figsize=(4, 3))
         subset_outputs = [output for output in outputs if output['name'].split('-lr-')[0] in method_subset]
-        plot_data(ax, subset_outputs, config['training_params']['num_epochs'], 'learning_rates', 'Learning rate', colormap, linestylemap, lr_ranges,  get_alpha_from_lr)
+        plot_data(ax, subset_outputs, config['training_params']['num_epochs'], 'learning_rates', 'Learning rate', lr_ranges,  get_alpha_from_lr)
         ax.legend(loc='upper right', fontsize=10)
         fig.subplots_adjust(top=0.935, bottom=0.03, left=0.155, right=0.99)
         name = 'figures/lr-' if 'sgd-m' in method_subset else 'figures/lr-adam-'
@@ -226,7 +169,7 @@ def main(config_file=None):
 
     # Plot step size lists
     fig, ax = plt.subplots(figsize=(4, 3))
-    plotted_methods = plot_step_size_and_lr(ax, outputs, colormap, linestylemap, lr_ranges, get_alpha_from_lr)
+    plotted_methods = plot_step_size_and_lr(ax, outputs, lr_ranges, get_alpha_from_lr)
     handles, labels = ax.get_legend_handles_labels()
     legend_handles = [copy.copy(handle) for handle in handles]
     for handle in legend_handles:
@@ -238,10 +181,10 @@ def main(config_file=None):
     fig.savefig('figures/step_size-' + outfilename + '.pdf', format='pdf', bbox_inches='tight')
 
     # Plot loss curves of tuned algorithms.
-    plot_tuned_curves(outputs, colormap, linestylemap, outfilename, config['training_params']['num_epochs'], wallclock=False, val=False)
-    plot_tuned_curves(outputs, colormap, linestylemap, outfilename, config['training_params']['num_epochs'], wallclock=False, val=True)
-    #plot_tuned_curves(outputs, colormap, linestylemap, outfilename, config['training_params']['num_epochs'], wallclock=True, val=False)
-    #plot_tuned_curves(outputs, colormap, linestylemap, outfilename, config['training_params']['num_epochs'], wallclock=True, val=True)
+    plot_tuned_curves(outputs, outfilename, config['training_params']['num_epochs'], wallclock=False, val=False)
+    plot_tuned_curves(outputs, outfilename, config['training_params']['num_epochs'], wallclock=False, val=True)
+    #plot_tuned_curves(outputs, outfilename, config['training_params']['num_epochs'], wallclock=True, val=False)
+    #plot_tuned_curves(outputs, outfilename, config['training_params']['num_epochs'], wallclock=True, val=True)
 
 
 if __name__ == "__main__":
