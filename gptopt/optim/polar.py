@@ -30,7 +30,9 @@ def zeropower_via_newtonschulz5(G, steps):
 
     if G.size(0) > G.size(1):
         X = X.T
+
     return X
+
 
 polar_express_coeffs_list = [
     (8.28721201814563, -23.595886519098837, 17.300387312530933),
@@ -63,5 +65,26 @@ def PolarExpress(G: torch.Tensor, steps, frob_eps=1e-2, deflation_eps=1e-2):
 
     if G.size(-2) > G.size(-1):
         X = X.mT
+
     return X
 
+
+def SVDPolarFactor(G: torch.Tensor):
+    assert G.ndim == 2, "Input tensor must have exactly two dimensions."
+
+    # Staying consistent with PolarExpress().
+    X = G.clone() # torch doesn't support SVD for bfloat16
+    if G.size(-2) > G.size(-1):
+        X = X.mT
+
+    # Compute polar factor from full SVD.
+    # Note: We could try using different solvers through the `driver` argument.
+    U, S, Vh = torch.linalg.svd(X, full_matrices=False)
+    X = U @ Vh
+
+    # Staying consistent with PolarExpress().
+    if G.size(-2) > G.size(-1):
+        X = X.mT
+    X = X.bfloat16() # cast to bfloat16 at the end to stay consistent
+
+    return X

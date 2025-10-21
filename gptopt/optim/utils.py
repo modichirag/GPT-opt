@@ -171,6 +171,7 @@ def get_optimizer(opt_config: dict, lr = 1e-3) -> Tuple[torch.optim.Optimizer, d
                   'prod_norm': prod_norm,
                   'nuc_approx': nuc_approx,
                   'spectral_scale': opt_config.get('spectral_scale', 1.0),
+                  'polar_method': opt_config.get('polar_method', "polar_express"),
                   'embed_norm': embed_norm,
                   'adamw_betas': opt_config.get('betas', (0.95, 0.95)),
                   'truncate_loss': truncate_loss,

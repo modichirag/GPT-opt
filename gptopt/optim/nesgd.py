@@ -1,7 +1,7 @@
 import torch
 import math
 
-from .polar import PolarExpress
+from .polar import zeropower_via_newtonschulz5, PolarExpress, SVDPolarFactor
 
 
 
@@ -17,19 +17,27 @@ class LinftyNorm:
 
 
 class SpectralNorm:
-    def __init__(self, spectral_scale=1.0, nuc_approx=None, ns_steps=5):
+    def __init__(self, spectral_scale=1.0, nuc_approx=None, polar_method="polar_express", ns_steps=5):
         assert nuc_approx in [None, "fro", "past"]
         self.spectral_scale = spectral_scale
         self.nuc_approx = nuc_approx
         self.ns_steps = 5
+        if polar_method == "jordan":
+            self.polar_fn = lambda g: zeropower_via_newtonschulz5(g, steps=self.ns_steps)
+        elif polar_method == "polar_express":
+            self.polar_fn = lambda g: PolarExpress(g, steps=self.ns_steps)
+        elif polar_method == "svd":
+            self.polar_fn = lambda g: SVDPolarFactor(g)
+        else:
+            raise NotImplementedError
 
     def lmo(self, g, state):
-        return self.spectral_scale * PolarExpress(g, steps=self.ns_steps)
+        return self.spectral_scale * self.polar_fn(g)
 
     def dual(self, g, state):
         if self.nuc_approx is None or (self.nuc_approx == "past" and "past_nuc" not in state):
             # If G = UDV^T, then nuc(G) = tr(G @ UV^T).
-            u = PolarExpress(g, steps=self.ns_steps)
+            u = self.polar_fn(g)
             nuc = (g.bfloat16() * u).sum()
         elif self.nuc_approx == "fro":
             nuc = torch.linalg.matrix_norm(g, ord="fro")
@@ -172,6 +180,8 @@ class NESGD(torch.optim.Optimizer):
             this scales the Muon LR by `spectral_scale`. If using the l2 or hybrid
             product norm and lmo=False (as in MuonMax and PolarGrad), this scales the
             Muon LR by `spectral_scale**2`.
+        polar_method: Which method to compute polar factor. Choices: ["jordan",
+            "polar_express", "svd"].
         embed_norm: Which norm to use on embedding layer parameters. Choices: ["linfty",
             "adam_infty", "adam_2"]. Note that "adam_infty" will essentially induce Adam
             when lmo=True, and an unnormalized version of Adam when lmo=False, while
@@ -192,6 +202,7 @@ class NESGD(torch.optim.Optimizer):
         prod_norm="linfty",
         nuc_approx=None,
         spectral_scale=1.0,
+        polar_method="polar_express",
         embed_norm="linfty",
         adamw_betas=(0.95, 0.95),
         adamw_eps=1e-8,
@@ -212,6 +223,7 @@ class NESGD(torch.optim.Optimizer):
         self.lmo = lmo
         self.nuc_approx = nuc_approx
         self.spectral_scale = spectral_scale
+        self.polar_method = polar_method
         self.truncate_loss = truncate_loss
         if self.nuc_approx is not None:
             print(f"Using {self.nuc_approx} approximation for nuclear norm.")
@@ -242,6 +254,7 @@ class NESGD(torch.optim.Optimizer):
             if norm == "spectral":
                 norm_kwargs["spectral_scale"] = spectral_scale
                 norm_kwargs["nuc_approx"] = nuc_approx
+                norm_kwargs["polar_method"] = polar_method
                 norm_kwargs["ns_steps"] = ns_steps
             elif norm == ["adam_infty", "adam_2"]:
                 norm_kwargs["eps"] = adamw_eps
