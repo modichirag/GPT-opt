@@ -126,12 +126,17 @@ Runs are numbered under `multirun/<timestamp>/` and each one captures the exact 
 
 ### Batch Size Terminology
 
-We expose two knobs for controlling how much data flows through the model each optimizer update:
+You only configure two numbers, and everything else is derived automatically:
 
-- `training.training_params.batch_size` is the per-device micro-batch size. It matches the `B` argument passed to `ShardedDataLoader`, so each rank processes `batch_size × context_length` tokens per forward/backward call.
-- `training.training_params.tokens_processed` is the total number of tokens you want to accumulate before taking an optimizer step. We derive `global_batch_size = tokens_processed / context_length`, which counts how many full sequences are consumed per update across all devices and gradient-accumulation steps.
+- `training.training_params.batch_size` — what you set. It is the per-device micro-batch size (`B` in `ShardedDataLoader`), so each rank consumes `batch_size × context_length` tokens per forward/backward call.
+- `training.training_params.tokens_processed` — what you set. It is the total number of tokens (across all devices and gradient-accumulation steps) that should contribute to one optimizer update.
 
-In single-GPU runs this means `global_batch_size = batch_size × num_microbatches`. Under DDP it additionally multiplies by `world_size`, so you can keep the global work per step constant while scaling `batch_size` with device count. The derived `global_batch_size` shows up in run names and sweep configs to make it easy to compare experiments that use the same effective batch size even if they reach it with different accumulation schedules.
+From those two inputs the training loop computes:
+
+- `global_batch_size = tokens_processed / context_length`, the number of full sequences seen per optimizer step across the entire job.
+- `num_microbatches = tokens_processed / (batch_size × context_length × world_size)`, the number of gradient-accumulation steps needed on each rank (defaults to 1 in single-GPU runs). The launcher computes this in `run.py` (mirrored in `gptopt/train.py` and `gptopt/train_distributed.py`) and asserts that the ratio divides evenly; Hydra surfaces the failure if it does not.
+
+Keeping `tokens_processed` fixed therefore keeps the global work per optimizer step constant while you vary the per-device `batch_size` or the `world_size`. The derived `global_batch_size` shows up in run names and sweep configs so you can compare experiments that target the same effective batch size even if they reach it with different accumulation schedules.
 
 ### Example Config Files
 
