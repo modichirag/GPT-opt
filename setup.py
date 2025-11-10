@@ -19,5 +19,7 @@ setup(
         'zstandard',
         'wandb',
         'hydra-core',
+        'hydra-colorlog',
+        'rich',
     ],
 )

@@ -26,9 +26,17 @@ hydra_conf/
 ├── optimizer/
 │   ├── adamw.yaml
 │   └── dap-ns-nadam.yaml
-└── training/
-    ├── slim_pajama10B.yaml
-    └── fineweb1B.yaml
+├── training/
+│   ├── slim_pajama10B.yaml
+│   └── fineweb1B.yaml
+├── data/
+│   ├── slim_pajama10B.yaml
+│   └── shakespeare.yaml
+├── logging/
+│   ├── default.yaml
+│   └── wandb.yaml
+└── paths/
+    └── default.yaml
 ```
 
 Only one option per group is active at a time. The defaults are declared in `hydra_conf/config.yaml`, but you can swap any group member via the CLI:
@@ -56,6 +64,36 @@ checkpoint_dir: ${paths.output_dir}/${model.name}
 ```
 
 The `${...}` expression is resolved at runtime after all overrides are applied.
+
+### Config Directory Overview
+
+Each subdirectory in `hydra_conf/` captures a separate concern. Knowing what lives where helps when you need to tune a run without touching code.
+
+**`config.yaml`**  
+Root defaults file. Lists the baseline option for every config group and any global overrides (e.g., default training recipe, logging backend). When you run `python run_hydra.py` with no overrides, Hydra resolves everything starting from this file.
+
+**`model/`**  
+Defines architecture templates: embedding width, layer counts, head counts, attention implementations, and any model-name metadata. Example: `gpt-medium.yaml` sets `config.n_layer`, toggles flash attention, and provides a `name` field used in logging paths.
+
+**`optimizer/`**  
+Holds optimizer families plus their base hyper-parameters. Files typically expose `optimizer_params` (lr, weight decay, betas) and any scheduler configuration. Mixing and matching models with optimizers is as simple as swapping filenames.
+
+**`training/`**  
+Describes run-level training knobs: maximum steps, gradient accumulation, eval frequency, checkpoint cadence, and dataset shortcuts. Many files also reference logging or launcher overrides via their `defaults` list so they can tweak Hydra job behavior per recipe.
+
+**`data/`**  
+Centralizes dataset-specific settings—input paths, tokenizer IDs, sequence length, preprocessing flags. Training configs point here through interpolation so data location changes don’t require touching training YAML.
+
+**`logging/`**  
+Specifies how run output is reported. `default.yaml` keeps console logging minimal; `wandb.yaml` enables the wandb plugin with run naming conventions. Optional logging extras can be stacked with `+logging=<option>`.
+
+**`paths/`**  
+Defines reusable filesystem anchors (`output_dir`, `dataset_root`, etc.). Other configs interpolate these values, ensuring directory changes propagate everywhere.
+
+**`hydra/`**  
+Meta-configs for Hydra itself: launcher settings, job logging style (e.g., `colorlog`), sweepers, and run directory patterns. Files here are rarely edited manually; they’re set via defaults or overrides when you need custom multirun behavior.
+
+Compose the pieces you need, then customize with CLI overrides rather than editing YAMLs. When in doubt, check the relevant subdirectory and copy an existing file as a starting point.
 
 ### Multirun Sweeps
 

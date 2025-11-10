@@ -124,6 +124,15 @@ python run_hydra.py -m \
 
 Runs are numbered under `multirun/<timestamp>/` and each one captures the exact config it used. The SLURM sweep scripts reuse the same idea under the hood by materializing all override combinations.
 
+### Batch Size Terminology
+
+We expose two knobs for controlling how much data flows through the model each optimizer update:
+
+- `training.training_params.batch_size` is the per-device micro-batch size. It matches the `B` argument passed to `ShardedDataLoader`, so each rank processes `batch_size × context_length` tokens per forward/backward call.
+- `training.training_params.tokens_processed` is the total number of tokens you want to accumulate before taking an optimizer step. We derive `global_batch_size = tokens_processed / context_length`, which counts how many full sequences are consumed per update across all devices and gradient-accumulation steps.
+
+In single-GPU runs this means `global_batch_size = batch_size × num_microbatches`. Under DDP it additionally multiplies by `world_size`, so you can keep the global work per step constant while scaling `batch_size` with device count. The derived `global_batch_size` shows up in run names and sweep configs to make it easy to compare experiments that use the same effective batch size even if they reach it with different accumulation schedules.
+
 ### Example Config Files
 
 **`hydra_conf/model/gpt-small.yaml`**
