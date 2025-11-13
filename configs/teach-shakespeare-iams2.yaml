@@ -1,0 +1,91 @@
+# config.yaml
+optimizer_params:
+  # - name: adamw
+  #   lr: [0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.3]
+  #   weight_decay: 0.0
+  #   lr_schedule: warm-up-constant-linear
+  #   warm_up_fraction: 0.1
+  #   cool_down_fraction: 0.1
+
+  - name: iams
+    lr: [ 0.01, 0.05, 0.1, 0.3, 1.0]  # 1.0
+    weight_decay: 0.0
+    lr_schedule: constant
+
+
+  - name: sgd-schedulep
+    lr: [ 0.01, 0.05, 0.1, 0.3, 1.0]  # 1.0
+    weight_decay: 0.0
+    lr_schedule: constant
+    ct_schedule: 0.1
+
+
+  # - name: sgd-schedulefree
+  #   lr: [0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.3]  # 0.05
+  #   weight_decay: 0.0
+  #   lr_schedule: warm-up-constant-linear
+  #   warm_up_fraction: 0.1
+  #   cool_down_fraction: 0.1
+
+
+  - name: adamw-schedulep 
+    lr: [ 0.01, 0.05, 0.1, 0.3, 1.0]  # 1.0
+    # lr: [0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.3]
+    weight_decay: 0.0
+    lr_schedule: constant
+    ct_schedule: 0.1
+
+  # - name: adamw-schedulefree
+  #   lr: [0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.3]
+  #   weight_decay: 0.0
+  #   lr_schedule: warm-up-constant-linear
+  #   warm_up_fraction: 0.1
+  #   cool_down_fraction: 0.1
+    
+  - name: iams-adam
+    lr: [ 0.01, 0.05, 0.1, 0.3, 1.0]  # 1.0
+    # lr: [0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.3]  # 0.05
+    weight_decay: 0.0
+    lr_schedule: constant
+
+
+  # - name: sgd-m
+  #   lr: [0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.3]  # 0.05
+  #   weight_decay: 0.0
+  #   lr_schedule: warm-up-constant-linear
+  #   warm_up_fraction: 0.1
+  #   cool_down_fraction: 0.0
+
+training_params:
+  tokens_processed: 4096 # equiv to batchsize 8
+  val_tokens_processed: 8388608 #2^23 
+  batch_size: 4
+  num_epochs: 1
+  context_length: 512
+  gradnorm: 0.0  # Removed testing polyak stepsizes
+  tensorcore_precision: high   #Can be highest, high, or medium
+  autocast: False
+  mixed_precision: float32
+  compile: False
+
+logging_params:
+  val_tokens_processed: 2048 #2^23
+  log_step: 50
+  val_step: 50
+  save_ckpt_step: 500
+  load_ckpt_step: 0
+  keep_last: 2
+  ckpt_dir: "" #/mnt/ceph/users/cmodi/gptopt/
+  
+teacher_model: "gpt2-medium"
+
+gpt_model:
+  n_embd: 768    # Hidden size used in distilgpt2
+  n_layer: 4    # Number of layers in distilgpt2
+  n_head: 8    # Number of attention heads in distilgpt2
+  vocab_size: 50304
+  flash_attention: False
+
+
+dataset:
+  name: "tiny_shakespeare"

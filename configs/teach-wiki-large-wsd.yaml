@@ -1,0 +1,56 @@
+# config.yaml
+optimizer_params:
+
+  - name: iams
+    lr: [0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1,   1.0, 5.0, 10] # 1.0
+    weight_decay: 0.0
+    lr_schedule: warm-up-constant-linear
+    warm_up_fraction: 0.1
+    cool_down_fraction: 0.1
+    
+  - name: iams-adam
+    lr: [0.00001, 0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.3] # 1.0
+    # lr: [0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.3]  # 0.05
+    weight_decay: 0.0
+    lr_schedule: warm-up-constant-linear
+    warm_up_fraction: 0.1
+    cool_down_fraction: 0.1
+
+
+training_params:
+  # tokens_processed should match effective tokens per optimizer step:
+  # tokens_processed = batch_size * context_length * grad_accum_steps
+  batch_size: 16              # 8 if memory is tight
+  num_epochs: 1               # 5–10 works well for WT2
+  context_length: 1024        # 512 also fine; 1024 preferred
+  gradnorm: 0.0
+  tensorcore_precision: high
+  autocast: True
+  mixed_precision: bfloat16
+  compile: False
+  # Set this to match effective tokens per step. With bs=16, ctx=1024, no accum:
+  tokens_processed:  65536  # 16 * 1024; if using grad_accum_steps=2 → 32768
+  # Cover most of the validation set (~200–250k tokens)
+  val_tokens_processed: 262144
+
+logging_params:
+  val_tokens_processed: 2048 #2^23
+  log_step: 50
+  val_step: 50
+  save_ckpt_step: 500
+  load_ckpt_step: 0
+  keep_last: 2
+  ckpt_dir: "" #/mnt/ceph/users/cmodi/gptopt/
+  
+teacher_model: "gpt2-xl"
+
+gpt_model:
+  n_embd: 768    # Hidden size used in distilgpt2
+  n_layer: 4    # Number of layers in distilgpt2
+  n_head: 8    # Number of attention heads in distilgpt2
+  vocab_size: 50257
+  flash_attention: True
+
+
+dataset:
+  name: "wikitext"
