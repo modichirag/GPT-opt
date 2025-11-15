@@ -4,12 +4,13 @@ import os
 from typing import Dict
 import subprocess
 import time
-
+import glob
 import yaml
 
 
 CONFIG_DIR = "configs"
 LOG_DIR = "output/slurm_logs"
+OUTPUT_DIR = "gptopt/outputs"
 
 get_launch_script = lambda name: f"""#!/bin/bash
 #SBATCH -p gpu
@@ -19,6 +20,7 @@ get_launch_script = lambda name: f"""#!/bin/bash
 #SBATCH --gpus-per-task=1
 #SBATCH --cpus-per-task=2
 #SBATCH --time=1-00:00:00
+#SBATCH --exclusive
 #SBATCH -o {LOG_DIR}/{name}.log
 
 export OMP_NUM_THREADS=1
@@ -35,10 +37,19 @@ def get_launch_path(name):
     return os.path.join(name + ".sh")
 
 
-def run_parallel(configs: Dict[str, Dict]):
+def run_parallel(configs: Dict[str, Dict], overwrite=True):
 
     job_ids = []
     for name, config in configs.items():
+
+        # Check if experiment was already run.
+        if not overwrite:
+            output_paths = os.path.join(OUTPUT_DIR, name, "*.json")
+            output_paths = glob.glob(output_paths)
+            assert len(output_paths) <= 1
+            if len(output_paths) == 1:
+                print(f"Skipping {name}, output file already exists.")
+                continue
 
         # Write config file.
         config_path = get_config_path(name)
@@ -91,5 +102,5 @@ def run_parallel(configs: Dict[str, Dict]):
         if os.path.isfile(launch_path):
             os.remove(launch_path)
         launch_dir = os.path.dirname(launch_path)
-        if len(os.listdir(launch_dir)) == 0:
+        if os.path.isdir(launch_dir) and len(os.listdir(launch_dir)) == 0:
             os.rmdir(launch_dir)

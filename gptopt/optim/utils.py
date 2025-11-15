@@ -8,10 +8,12 @@ from .momo_adam import MomoAdam
 from .muon import Muon
 from .nesgd import NESGD
 from .sign_gd import SignGD
+from .lion import Lion
+from .adan import Adan
+from .sophia import SophiaG
 # from .sps import SPS
 # from .adabound import AdaBoundW
 # from .adabelief import AdaBelief
-# from .lion import Lion
 
 def get_optimizer(opt_config: dict, lr = 1e-3) -> Tuple[torch.optim.Optimizer, dict]:
     """
@@ -195,6 +197,29 @@ def get_optimizer(opt_config: dict, lr = 1e-3) -> Tuple[torch.optim.Optimizer, d
                   'lmo': False
                   }
 
+    elif name == 'lion':
+        opt_obj = Lion
+        hyperp = {'lr': lr,
+                  'weight_decay': opt_config.get('weight_decay', 0.01),
+                  'betas': opt_config.get('betas', (0.95, 0.98)), # set from Table 12 in Lion paper
+                  }
+
+    elif name == 'adan':
+        opt_obj = Adan
+        hyperp = {'lr': lr,
+                  'weight_decay': opt_config.get('weight_decay', 0.02),
+                  'betas': opt_config.get('betas', (0.02, 0.08, 0.01)),
+                  'eps': opt_config.get('eps', 1e-8),
+                  }
+
+    elif name == 'sophia':
+        opt_obj = SophiaG
+        hyperp = {'lr': lr,
+                  'weight_decay': opt_config.get('weight_decay', 0.2),
+                  'betas': opt_config.get('betas', (0.965, 0.99)),
+                  'rho': opt_config.get('rho', 0.05),
+                  }
+
     # elif name == 'iam':
     #     opt_obj = IAM
     #     hyperp = {'lr': lr,
@@ -229,13 +254,6 @@ def get_optimizer(opt_config: dict, lr = 1e-3) -> Tuple[torch.optim.Optimizer, d
     #               'weight_decay': opt_config.get('weight_decay', 0),
     #               'betas': opt_config.get('betas', (0.9, 0.999)),
     #               'eps': opt_config.get('eps', 1e-16),
-    #               }
-        
-    # elif name == 'lion':
-    #     opt_obj = Lion
-    #     hyperp = {'lr': lr,
-    #               'weight_decay': opt_config.get('weight_decay', 0),
-    #               'betas': opt_config.get('betas', (0.9, 0.99)),
     #               }
     else:
         raise KeyError(f"Unknown optimizer name {name}.")
