@@ -29,7 +29,7 @@ def eval_validation_loss(model, val_dataloader, val_accum_steps, autocast_ctxt):
                 val_loss += model(batch[0], batch[1], return_logits=False)[1]
             counter += 1
             if (val_accum_steps != 0) & (counter >= val_accum_steps): break
-    val_loss = torch.tensor(val_loss.detach().clone(), device=device)/counter
+    val_loss = val_loss.detach().clone()/counter
     if world_size > 1: dist.all_reduce(val_loss, op=dist.ReduceOp.AVG)
     if rank == 0:
         print(f"Validation Loss: {val_loss.item()}")

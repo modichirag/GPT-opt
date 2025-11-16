@@ -53,6 +53,7 @@ def main(config : DictConfig):
     if master_process: print(f"Load data from {dataset_path}")
     B, T = training_params['batch_size'], training_params['context_length']
     assert training_params['tokens_processed'] % (world_size * B * T) == 0 
+    assert config['logging_params']['val_tokens_processed'] % (world_size * B * T) == 0
     train_dataloader = ShardedDataLoader(dataset_path, B, T, "train", device)
     val_dataloader = ShardedDataLoader(dataset_path, B, T, "val", device)
     total_iterations = int(training_params['num_epochs'] * len(train_dataloader) / training_params['tokens_processed'])
