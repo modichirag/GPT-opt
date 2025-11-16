@@ -73,6 +73,14 @@ def zeropower_via_newtonschulz5(G, steps):
     return X
 
 
+def svd_exact_polar(G, _):
+    """
+    Exact polar factorization via SVD
+    """
+    assert len(G.shape) >= 2
+    U, _, Vh = torch.linalg.svd(G.to(torch.float32), full_matrices=False)
+    return (U @ Vh).to(G.dtype)
+
 
 class Muon(torch.optim.Optimizer):
     """
@@ -176,6 +184,8 @@ class Muon(torch.optim.Optimizer):
             return PolarExpress 
         elif polar_method == "fast_polarexpress":
             return partial(FastApplyPolarExpress, restart_interval=3, shift_eps=1e-3)
+        elif polar_method == "svd-exact":
+            return svd_exact_polar
         else:
             raise ValueError(f"Unknown polar method: {polar_method}")
 
