@@ -1,8 +1,8 @@
 WANDB="+logging_params.wandb.project=polar-express"
-COMMON="+training_data=fineweb10B gpt_model=gpt-large hydra.job.name=\"10b_data\""
+COMMON="+training_data=fineweb10B gpt_model=gpt-small hydra.job.name=\"10b_data_small\""
 MUON="optimizer_params.name=muon +optimizer_params.args.ns_steps=5"
 
-for wd in 0.1; do
+for wd in 0.0; do
 
 for lr in 0.005 0.01 0.02; do
 for polar_method in Keller Jiacheng polarexpress; do
@@ -12,4 +12,4 @@ done
 
 done
 
-# Run each of these for 24 hrs on 4 H100s
+# on 1 H100, we expect each run to take 12.5 hours, but I'll give it 16 to be safe
