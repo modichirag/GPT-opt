@@ -22,13 +22,14 @@ def eval_validation_loss(model, val_dataloader, val_accum_steps, autocast_ctxt):
 
     world_size, rank, local_rank, device  = get_worker_info()
     model.eval()
-    val_loss, counter = 0., 0
+    val_loss = torch.tensor(0., device=device)
+    counter = 0
     with torch.no_grad():
         for batch in val_dataloader:
             with autocast_ctxt:
-                val_loss += model(batch[0], batch[1], return_logits=False)[1]
+                val_loss += torch.tensor(model(batch[0], batch[1], return_logits=False)[1], device=device)
             counter += 1
-            if (val_accum_steps != 0) & (counter >= val_accum_steps): break
+            if (val_accum_steps != 0) and (counter >= val_accum_steps): break
     val_loss = val_loss.detach().clone()/counter
     if world_size > 1: dist.all_reduce(val_loss, op=dist.ReduceOp.AVG)
     if rank == 0:

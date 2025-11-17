@@ -16,7 +16,7 @@ lr_schedule:
 logging_params:
   # val_tokens_processed must be divisible by (world size * batch size * token length)
   # If it is zero, the whole validation set is used.
-  val_tokens_processed: 262144  # 2^18
+  val_tokens_processed: 524288  # 2^19
   log_step: 50
   val_step: 50
   save_ckpt_step: 500
