@@ -9,6 +9,7 @@ import copy
 import json
 import os
 import numpy as np
+from pathlib import Path
 
 plt.rcParams["font.family"] = "serif"
 plt.rcParams['font.size'] = 12
@@ -79,7 +80,8 @@ def plot_final_loss_vs_lr(outputs, colormap, outfilename, linestylemap, val=Fals
     ax.legend(loc='upper right', fontsize=10)
     ax.grid(axis='both', lw=0.2, ls='--', zorder=0)
     if y_top_lim is not None:
-        ax.set_ylim(bottom=3.35, top=y_top_lim)
+        # ax.set_ylim(bottom=3.35, top=y_top_lim)
+        ax.set_ylim(top=y_top_lim)
     # ax.set_ylim(bottom=3.0, top=4.5)
     # ax.set_xlim(0.0003, 0.05)
     fig.subplots_adjust(top=0.95, bottom=0.15, left=0.15, right=0.95)
@@ -137,7 +139,7 @@ def main(outputs, outfilename, y_top_lim_lrs=None, y_top_vs_time=None):
             best_outputs[name] = output
             lr = float(lr)
             best_lr[name] = [lr, lr] 
-    os.makedirs("figures", exist_ok=True)
+    Path('figures/' + outfilename + '.pdf').parent.mkdir(parents=True, exist_ok=True)
     for name, output in best_outputs.items():
         print(f"Best {name}-{best_lr[name][0]} final val loss: {output['logs']['val_losses'][-1]}")
     # print(f"Best {name} lr: {lr}")
@@ -173,7 +175,7 @@ def main(outputs, outfilename, y_top_lim_lrs=None, y_top_vs_time=None):
         ax.set_ylim(top=y_top_vs_time)
     ax.tick_params(axis='both', which='major', labelsize=8)  # Set tick label font size
     ax.set_xlabel('Time (s)', fontsize=10)  # Set x-axis label font size
-    ax.set_ylabel('Validation Loss', fontsize=10) 
+    ax.set_ylabel('Loss', fontsize=10) 
     # ax.legend(loc='lower center', bbox_to_anchor=(0.5, -0.5), ncol=4, fontsize=10) 
     # ax.legend(loc='center left', bbox_to_anchor=(1, 0.5), fontsize=10)  # Legend placed next to the figure
     # ax.set_yscale('log')
@@ -218,8 +220,14 @@ if __name__ == "__main__":
     # parser = argparse.ArgumentParser(description='Plotting gpt_distill outputs.')
     # parser.add_argument('--results_folder', type=str, nargs='?', help='Path to results folder', default=None)
 
-    results_folder = "outputs/hydra-results/main_run"
-    outputs = load_output_folder("outputs/hydra-results/main_run")
+    # results_folder = "outputs/hydra-results/main_run"
+    # lims = dict(y_top_lim_lrs=3.7, y_top_vs_time=4.5)
+    results_folder = "outputs/hydra-results/10b_data"
+    lims = dict(y_top_vs_time=3.6)
+    # results_folder = "outputs/hydra-results/10b_data_small"
+    # lims = dict(y_top_lim_lrs=3.7, y_top_vs_time=4.)
+    outputs = load_output_folder(results_folder)
+    print("Total num experiments:", len(outputs))
 
     for weight_decay in set(output['config']['optimizer_params']['args']['weight_decay'] for output in outputs):
         small_outputs = [
@@ -232,6 +240,8 @@ if __name__ == "__main__":
                 if output['config']['gpt_model']['n_layer'] == nlayer
             ]
             assert len(small_outputs) > 0
-            outfilename = os.path.basename(results_folder.rstrip('/')) + f"-nl-{nlayer}" + "-wd-" + str(weight_decay)
+            experiment_name = os.path.basename(results_folder.rstrip('/'))
+            outfilename = experiment_name + f"-nl-{nlayer}" + "-wd-" + str(weight_decay)
+            print("nlayer: ", nlayer, " weight_decay: ", weight_decay)
             print(f"Loaded {len(smaller_outputs)} outputs from {results_folder}")
-            main(smaller_outputs, outfilename, y_top_lim_lrs=3.7, y_top_vs_time=4.5)
+            main(smaller_outputs, f"{experiment_name}/{outfilename}", **lims)

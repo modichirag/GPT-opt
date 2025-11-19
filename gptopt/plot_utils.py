@@ -131,7 +131,7 @@ def smoothen_curve_exp(data, num_points, beta=0.05):
 
 def smoothen_dict(dict, num_points, beta= 0.05):
     for key in dict.keys():
-        if key == 'losses':
+        if key == 'losses' or key == 'val_losses':
             dict[key] = smoothen_curve_exp(dict[key], num_points, beta = beta)
 
         """
