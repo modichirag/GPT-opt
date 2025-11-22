@@ -73,6 +73,7 @@ def zeropower_via_newtonschulz5(G, steps):
     return X
 
 
+@torch.compile
 def svd_exact_polar(G, _):
     """
     Exact polar factorization via SVD

@@ -17,7 +17,7 @@ def get_lr_and_name(output):
     alg_name = output['config']['optimizer_params']['name']
     if alg_name == 'muon':
         polar_method = output['config']['optimizer_params']['args']['polar_method']
-        translate = {"Keller": "Jordan", "Jiacheng": "You"}
+        translate = {"Keller": "Jordan", "Jiacheng": "You", "polarexpress": "PolarExp"}
         if polar_method in translate: polar_method = translate[polar_method]
         name = f"muon-{polar_method}"
     else:

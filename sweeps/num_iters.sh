@@ -11,4 +11,4 @@ done
 
 done
 
-# on 1 H100, we expect each run to take 12.5 hours, but I'll give it 16 to be safe
+# on 1 H100, we expect each run to take 4.5 hours, but I'll give it 6 to be safe

@@ -189,7 +189,7 @@ if __name__ == "__main__":
     plt.rc('legend', fontsize=10)
 
     parser = argparse.ArgumentParser(description='Plotting outputs.')
-    parser.add_argument('--experiment_name', type=str, nargs='?', help='Path to results folder', default="main_run")
+    parser.add_argument('--experiment_name', type=str, nargs='?', help='Path to results folder', default="ns-steps")
     parser.add_argument('--figures_dir', type=str, nargs='?', help='Path to results folder', default="alt_figures")
     args = parser.parse_args()
     main(experiment_name=args.experiment_name, figures_dir=args.figures_dir)

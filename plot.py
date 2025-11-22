@@ -28,10 +28,12 @@ def load_outputs(output_dir):
                 outputs.append(output)
     return outputs
 
-def load_output_folder(experiment_results_folder):
+def load_output_folder(experiment_results_folder, exclude_runs=[]):
     outputs = []
     for root, _, files in os.walk(experiment_results_folder):
         for file_name in files:
+            if any(exclude == file_name for exclude in exclude_runs):
+                continue
             if file_name.startswith("logs") and file_name.endswith(".json"):
                 file_path = os.path.join(root, file_name)
                 with open(file_path, 'r') as file:
@@ -98,14 +100,14 @@ def main(outputs, outfilename, y_top_lim_lrs=None, y_top_vs_time=None):
                 'adamw': '#00518F',  # Oragne'#FF6B35',
                 'adam-sch': '#FF6B35',
                 'momo': '#61ACE5',
-                'muon-polarexpress': 'k',
+                'muon-PolarExp': 'k',
                 'muon-You': '#8A2BE2',  # Added a new color for "muon" (blue-violet)
                 'muon-Jordan': '#FF0000',
     }
     linestylemap = {'momo': None,
                     'sgd-m': None,
                     'sgd-sch': '--',
-                    'muon-polarexpress': None,
+                    'muon-PolarExp': None,
                     'adam': None,
                     'adamw': None,
                     'adam-sch': '--',
@@ -223,10 +225,11 @@ if __name__ == "__main__":
     # results_folder = "outputs/hydra-results/main_run"
     # lims = dict(y_top_lim_lrs=3.7, y_top_vs_time=4.5)
     results_folder = "outputs/hydra-results/10b_data"
-    lims = dict(y_top_vs_time=3.6)
+    lims = dict(y_top_vs_time=3.5)
     # results_folder = "outputs/hydra-results/10b_data_small"
-    # lims = dict(y_top_lim_lrs=3.7, y_top_vs_time=4.)
-    outputs = load_output_folder(results_folder)
+    # lims = dict(y_top_lim_lrs=3.4, y_top_vs_time=3.6)
+    exclude_runs = ["logs_jobid_29220878.json", "logs_jobid_f1cda670.json"]
+    outputs = load_output_folder(results_folder, exclude_runs=exclude_runs)
     print("Total num experiments:", len(outputs))
 
     for weight_decay in set(output['config']['optimizer_params']['args']['weight_decay'] for output in outputs):
