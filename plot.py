@@ -43,7 +43,7 @@ def load_output_folder(experiment_results_folder, exclude_runs=[]):
                 outputs.append(dict(config=config, logs=logs))
     return outputs
 
-def plot_final_loss_vs_lr(outputs, colormap, outfilename, linestylemap, val=False, y_top_lim=None):
+def plot_final_loss_vs_lr(outputs, colormap, outfilename, linestylemap, val=False, y_top_lim=None, y_bottom_lim=None):
     """Plot final loss versus learning rate as lines for each method."""
     fig, ax = plt.subplots(figsize=(6, 4))
     methods = {}
@@ -84,12 +84,14 @@ def plot_final_loss_vs_lr(outputs, colormap, outfilename, linestylemap, val=Fals
     if y_top_lim is not None:
         # ax.set_ylim(bottom=3.35, top=y_top_lim)
         ax.set_ylim(top=y_top_lim)
+    if y_bottom_lim is not None:
+        ax.set_ylim(bottom=y_bottom_lim)
     # ax.set_ylim(bottom=3.0, top=4.5)
     # ax.set_xlim(0.0003, 0.05)
     fig.subplots_adjust(top=0.95, bottom=0.15, left=0.15, right=0.95)
     fig.savefig(plotfile, format='pdf', bbox_inches='tight')
 
-def main(outputs, outfilename, y_top_lim_lrs=None, y_top_vs_time=None):
+def main(outputs, outfilename, y_top_lim_lrs=None, y_bottom_lim_lrs=None, y_top_vs_time=None):
     for output in outputs:  # Smoothing
         smoothen_dict(output['logs'], num_points=100, beta =0.05)
 
@@ -146,8 +148,8 @@ def main(outputs, outfilename, y_top_lim_lrs=None, y_top_vs_time=None):
         print(f"Best {name}-{best_lr[name][0]} final val loss: {output['logs']['val_losses'][-1]}")
     # print(f"Best {name} lr: {lr}")
     # Plot final loss vs learning rate
-    plot_final_loss_vs_lr(outputs, colormap, outfilename, linestylemap, y_top_lim=y_top_lim_lrs)
-    plot_final_loss_vs_lr(outputs, colormap, outfilename, linestylemap, val=True, y_top_lim=y_top_lim_lrs)
+    plot_final_loss_vs_lr(outputs, colormap, outfilename, linestylemap, y_top_lim=y_top_lim_lrs, y_bottom_lim=y_bottom_lim_lrs)
+    plot_final_loss_vs_lr(outputs, colormap, outfilename, linestylemap, val=True, y_top_lim=y_top_lim_lrs, y_bottom_lim=y_bottom_lim_lrs)
     # Plot loss
     selected_outputs = list(best_outputs.values())
     get_alpha_from_lr = lambda lr, lr_range: 0.85
@@ -224,10 +226,10 @@ if __name__ == "__main__":
 
     # results_folder = "outputs/hydra-results/main_run"
     # lims = dict(y_top_lim_lrs=3.7, y_top_vs_time=4.5)
-    results_folder = "outputs/hydra-results/10b_data"
-    lims = dict(y_top_vs_time=3.5)
-    # results_folder = "outputs/hydra-results/10b_data_small"
-    # lims = dict(y_top_lim_lrs=3.4, y_top_vs_time=3.6)
+    # results_folder = "outputs/hydra-results/10b_data"
+    # lims = dict(y_top_vs_time=3.5)
+    results_folder = "outputs/hydra-results/10b_data_small"
+    lims = dict(y_top_lim_lrs=3.5, y_top_vs_time=3.6, y_bottom_lim_lrs=3.2)
     exclude_runs = ["logs_jobid_29220878.json", "logs_jobid_f1cda670.json"]
     outputs = load_output_folder(results_folder, exclude_runs=exclude_runs)
     print("Total num experiments:", len(outputs))
