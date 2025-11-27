@@ -74,13 +74,18 @@ def zeropower_via_newtonschulz5(G, steps):
 
 
 @torch.compile
-def svd_exact_polar(G, _):
+def svd_exact_polar(G, _, cutoff=None, reverse=False):
     """
     Exact polar factorization via SVD
     """
     assert len(G.shape) >= 2
-    U, _, Vh = torch.linalg.svd(G.to(torch.float32), full_matrices=False)
-    return (U @ Vh).to(G.dtype)
+    U, Sigma, Vh = torch.linalg.svd(G.to(torch.float32), full_matrices=False)
+    if cutoff is None:
+        return (U @ Vh).to(G.dtype)
+    else:
+        Sigma = ((Sigma / Sigma.max()) >= cutoff).to(G.dtype)  # zero out small singular values
+        if reverse: Sigma = 2*Sigma - 1
+        return (U @ torch.diag(Sigma) @ Vh).to(G.dtype)
 
 
 class Muon(torch.optim.Optimizer):
@@ -123,6 +128,7 @@ class Muon(torch.optim.Optimizer):
                  adamw_eps=1e-8,
                  split_heads=False,
                  nheads=None,
+                 polar_args={},
                 ):
         """
         Arguments:
@@ -173,9 +179,9 @@ class Muon(torch.optim.Optimizer):
             self.state[p]["use_muon"] = False
 
         # Instantiate the polar factorization method
-        self.polar_factorizer = self._initialize_polar_factorizer(polar_method)
+        self.polar_factorizer = self._initialize_polar_factorizer(polar_method, polar_args)
 
-    def _initialize_polar_factorizer(self, polar_method):
+    def _initialize_polar_factorizer(self, polar_method, polar_args):
         """Initialize the polar factorization method based on the provided name and parameters."""
         if polar_method == "Keller":
             return zeropower_via_newtonschulz5  # Use the method directly
@@ -186,7 +192,7 @@ class Muon(torch.optim.Optimizer):
         elif polar_method == "fast_polarexpress":
             return partial(FastApplyPolarExpress, restart_interval=3, shift_eps=1e-3)
         elif polar_method == "svd-exact":
-            return svd_exact_polar
+            return partial(svd_exact_polar, cutoff=polar_args.get("svd_cutoff", None), reverse=polar_args.get("svd_reverse", False))
         else:
             raise ValueError(f"Unknown polar method: {polar_method}")
 
