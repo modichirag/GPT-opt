@@ -187,7 +187,7 @@ def main(experiment_name, figures_dir):
         loss_curve(run_data, group_out_path)
 
 
-def cutoff_barplot(run_data, outfolder):
+def supression_plots(run_data, outfolder):
     outfolder.mkdir(parents=True, exist_ok=True)
     df = make_summary_df(run_data)
     true_polar_label = r"$\sigma \mapsto 1$ (true polar)"
@@ -201,18 +201,46 @@ def cutoff_barplot(run_data, outfolder):
         else:
             return zero_label
     df["Cutoff ($\gamma$)"] = df["Cutoff"].apply(lambda x: 0 if x is None else x).astype(float)
-    df["Function"] = df.apply(group_label, axis=1)
+    df["Singular Value Map"] = df.apply(group_label, axis=1)
 
-    fig, ax = plt.subplots(2, 1, figsize=(5, 3), sharex=True, squeeze=True)
-    sns.lineplot(data=df[df["Function"] != true_polar_label], x="Cutoff ($\gamma$)", y="Final Validation Loss", hue="Function", style="Function", markers=True, legend=True, ax=ax[0])
-    for y in df.loc[df["Function"] == true_polar_label, "Final Validation Loss"]:
+    fig, ax = plt.subplots(2, 1, figsize=(6.5, 4.5), height_ratios=(1, 0.2), sharex=True, squeeze=True)
+
+    cutoff_df = df[(df["Singular Value Map"] != true_polar_label) & (df["Cutoff ($\\gamma$)"] < 1e-1)]
+    sns.lineplot(data=cutoff_df, x="Cutoff ($\\gamma$)", y="Final Validation Loss", hue="Singular Value Map", style="Singular Value Map", markers=True, legend=True, ax=ax[0])
+    ##### hacks to add text labels
+    label_color_map = {line.get_label(): line.get_color() for line in ax[0].get_lines()}
+    position_map = {k: v for k, v in zip(cutoff_df["Singular Value Map"].unique(), [
+        dict(xshift=.95, yshift=.11, horizontalalignment='right', verticalalignment='top'),
+        dict(xshift=1.15, yshift=.1, horizontalalignment='left', verticalalignment='top'),
+    ])}
+    for x, y, group in zip(cutoff_df["Cutoff ($\\gamma$)"], cutoff_df["Final Validation Loss"], cutoff_df["Singular Value Map"]):
+        ax[0].text(x * position_map[group]['xshift'], y + position_map[group]['yshift'], f'{y:.3f}', ha=position_map[group]['horizontalalignment'], va=position_map[group]['verticalalignment'], color=label_color_map.get(group, 'k'))
+    #####
+    for y in df.loc[df["Singular Value Map"] == true_polar_label, "Final Validation Loss"]:
         ax[0].axhline(y=y, color='tab:green', linestyle=':', label=true_polar_label)
-    ax[0].legend(title="Function")
-    plt.xscale('log')
+        ax[0].set_yticks(np.unique(np.concatenate([list(filter(lambda x: x > y, ax[0].get_yticks())), [y]])))  # add a tick for the SVD method
+    ax[0].legend(title="Singular Value Map")
+    ax[0].set_xscale('log')
+    l, r = ax[0].get_xlim()
+    ax[0].set_xlim(l / 1.5, r * 1.5)
     # lower, upper = df["Final Validation Loss"].min(), df["Final Validation Loss"].max()
     # yrange = upper - lower
     # ax.set_ylim(lower - 0.2 * yrange, upper + 0.3 * yrange)
-    fig.savefig(outfolder / "compare_ns_steps.pdf", bbox_inches='tight')
+
+    from gptopt.optim.polar_express import coeffs_list
+    xlim = ax[0].get_xlim()
+    test_svs = np.geomspace(*xlim, num=1001)
+    out_svs = test_svs.copy()
+    for a, b, c in coeffs_list[:5]:
+        out_svs = a * out_svs + b * out_svs**3 + c * out_svs**5
+    ax[1].plot(test_svs, out_svs, color='k')
+    ax[1].set_xlim(*xlim)
+    ax[1].set_xlabel("Cutoff ($\gamma$)")
+    ax[1].set_ylabel('PolarExpress$(\gamma)$')
+    ax[1].set_ylim(bottom=0)
+    # ax[1].set_yscale('log')
+
+    fig.savefig(outfolder / "compare_clipping.pdf", bbox_inches='tight')
 
     fig2, ax2 = plt.subplots(1, 1, figsize=(5, 3), squeeze=True)
     colors = {reverse_label: 'tab:blue', zero_label: 'tab:orange', true_polar_label: 'tab:green'}
@@ -223,15 +251,15 @@ def cutoff_barplot(run_data, outfolder):
         ax2.plot(
             np.linspace(0, run_datum['config']["training_data"]["training_params"]["num_epochs"], num=len(y)),
             y,
-            color=colors[row["Function"]],
-            label=row["Function"],
-            linestyle=linestyles[row["Function"]],
+            color=colors[row["Singular Value Map"]],
+            label=row["Singular Value Map"],
+            linestyle=linestyles[row["Singular Value Map"]],
         )
-    ax.set_xscale('log')
-    ax.set_yscale('log')
-    ax.set_xlabel("Epochs")
-    ax.set_ylabel("Validation Loss")
-    ax.legend()
+    ax2.set_xscale('log')
+    ax2.set_yscale('log')
+    ax2.set_xlabel("Epochs")
+    ax2.set_ylabel("Validation Loss")
+    ax2.legend()
     fig2.savefig(outfolder / "val_losses.pdf", bbox_inches='tight')
 
 
@@ -252,7 +280,7 @@ def main2(experiment_name, figures_dir):
         sum_df = make_summary_df(run_data)
         print(list(sum_df))
         print(sum_df)
-        cutoff_barplot(run_data, group_out_path)
+        supression_plots(run_data, group_out_path)
 
 
 if __name__ == "__main__":
