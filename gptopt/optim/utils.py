@@ -6,6 +6,7 @@ from transformers import get_cosine_schedule_with_warmup
 from .momo import Momo
 from .momo_adam import MomoAdam
 from .muon import Muon
+from .muonadam import MuonAdam
 from .nesgd import NESGD
 from .sign_gd import SignGD
 from .lion import Lion
@@ -116,6 +117,13 @@ def get_optimizer(opt_config: dict, lr = 1e-3) -> Tuple[torch.optim.Optimizer, d
                   'divide': opt_config.get('divide', True),
                   'use_fstar': True
                   }
+
+    elif name == "muonadam":
+        opt_obj = MuonAdam
+        hyperp = {'lr': lr,
+                  'wd': opt_config.get('weight_decay', 0),
+                  'momentum': opt_config.get('momentum', 0.95),
+                 }
 
     elif 'muon' in name:
         opt_obj = Muon

@@ -1,0 +1,40 @@
+# config.yaml
+optimizer_params:
+  - name: "nesgd-adam_infty-lmo"
+    lr: [0.001]
+    spectral_scale: 10.0
+    weight_decay: 0.0
+    lr_schedule: warmup-constant-linear
+    warm_up_fraction: 0.05
+    cool_down_fraction: 0.5
+
+training_params:
+  tokens_processed: 524288 # 2^19
+  val_tokens_processed: 8388608 #2^23
+  batch_size: 64
+  num_epochs: 1
+  context_length: 1024
+  gradnorm: 0.0
+  tensorcore_precision: high   #Can be highest, high, or medium
+  autocast: True
+  mixed_precision: bfloat16
+  compile: True
+
+logging_params:
+  val_tokens_processed: 8388608 #2^23
+  log_step: 256
+  val_step: 256
+  save_ckpt_step: 512
+  load_ckpt_step: 0
+  keep_last: 2
+  ckpt_dir: "" #/mnt/ceph/users/cmodi/gptopt/
+
+gpt_model:
+  n_embd: 768    
+  n_layer: 12   
+  n_head: 12    
+  vocab_size: 50257
+  flash_attention: True
+
+dataset:
+  name: "fineweb1B"

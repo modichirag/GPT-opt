@@ -96,9 +96,46 @@ for opt_config in list_optimizer_params:
 
         # Setup optimizer
         optimizer_obj, hyperp = get_optimizer(opt_config, lr=lr)
-        named_keywords = ["muon", "nesgd"]
-        p = model_copy.named_parameters() if any([key in opt_config['name'] for key in named_keywords]) else model_copy.parameters()
-        optimizer = optimizer_obj(p, **hyperp)
+
+        # temp
+        if opt_config["name"] == "muonadam":
+            lr = hyperp["lr"]
+            del hyperp["lr"]
+
+            muon_param_names = [
+                name for name, p in model_copy.named_parameters()
+                if p.ndim >= 2 and not any(
+                    excluded in name
+                    for excluded in ["embeddings", "embed_tokens", "wte", "lm_head", "wpe"]
+                )
+            ]
+            muon_params = [
+                p for name, p in model_copy.named_parameters()
+                if name in muon_param_names
+            ]
+            adam_params = [
+                p for name, p in model_copy.named_parameters()
+                if name not in muon_param_names
+            ]
+
+            param_groups = [
+                {
+                    "opt": "muon",
+                    "params": muon_params,
+                    "lr": 10*lr,
+                },
+                {
+                    "opt": "adam",
+                    "params": adam_params,
+                    "lr": lr,
+                },
+            ]
+            optimizer = optimizer_obj(param_groups, **hyperp)
+        else:
+            named_keywords = ["muon", "nesgd"]
+            p = model_copy.named_parameters() if any([key in opt_config['name'] for key in named_keywords]) else model_copy.parameters()
+            optimizer = optimizer_obj(p, **hyperp)
+
         scheduler = get_scheduler(opt_config, optimizer, total_iterations=total_iterations)
         
         # Train
