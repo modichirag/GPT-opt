@@ -77,7 +77,6 @@ class MuonAdam(torch.optim.Optimizer):
         if closure is not None:
             with torch.enable_grad():
                 loss = closure()
-
         # Update Muon parameters.
         group = self.opt_param_groups["muon"]
         lr = group["lr"]
@@ -97,7 +96,7 @@ class MuonAdam(torch.optim.Optimizer):
             buf.mul_(momentum).add_(g, alpha=1.0-momentum)
 
             # Apply update.
-            u = self.polar_fn(g)
+            u = self.polar_fn(buf)
             p.data.mul_(1 - lr * wd)
             p.data.add_(u, alpha=-lr)
 
@@ -122,7 +121,6 @@ class MuonAdam(torch.optim.Optimizer):
             buf2 = state["sq_momentum_buffer"]
             buf.lerp_(g, 1.0 - beta1)
             buf2.lerp_(g.square(), 1.0 - beta2)
-
             # Apply update.
             g = buf / (eps + buf2.sqrt())
             p.data.mul_(1 - lr * wd)
