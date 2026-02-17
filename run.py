@@ -99,8 +99,6 @@ for opt_config in list_optimizer_params:
 
         # temp
         if opt_config["name"] == "muonadam":
-            lr = hyperp["lr"]
-            del hyperp["lr"]
 
             muon_param_names = [
                 name for name, p in model_copy.named_parameters()
@@ -118,19 +116,7 @@ for opt_config in list_optimizer_params:
                 if name not in muon_param_names
             ]
 
-            param_groups = [
-                {
-                    "opt": "muon",
-                    "params": muon_params,
-                    "lr": 10*lr,
-                },
-                {
-                    "opt": "adam",
-                    "params": adam_params,
-                    "lr": lr,
-                },
-            ]
-            optimizer = optimizer_obj(param_groups, **hyperp)
+            optimizer = optimizer_obj(muon_params, adam_params, **hyperp)
         else:
             named_keywords = ["muon", "nesgd"]
             p = model_copy.named_parameters() if any([key in opt_config['name'] for key in named_keywords]) else model_copy.parameters()

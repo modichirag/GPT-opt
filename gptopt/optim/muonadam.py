@@ -7,8 +7,10 @@ from .polar import zeropower_via_newtonschulz5, PolarExpress, SVDPolarFactor
 class MuonAdam(torch.optim.Optimizer):
     """
     Arguments:
-        params: All parameters to be optimized, in two groups.
+        muon_params: Parameters to be optimized with Muon.
+        adam_params: Parameters to be optimized with Adam.
         lr: The learning rate. (0.02 is a good default)
+        muon_lr_scale: Multiple for lr of Muon params. (10 is a good default)
         wd: Weight decay.
         momentum: The momentum used for gradient accumulation. (0.95 is a good default)
         ns_steps: The number of Newton-Schulz iterations to run. (6 is probably always enough)
@@ -19,8 +21,10 @@ class MuonAdam(torch.optim.Optimizer):
     """
     def __init__(
         self,
-        params,
+        muon_params,
+        adam_params,
         lr=1e-3,
+        muon_lr_scale=10,
         wd=0.1,
         momentum=0.95,
         ns_steps=5,
@@ -29,22 +33,12 @@ class MuonAdam(torch.optim.Optimizer):
         eps=1e-8,
     ):
 
-        # We expect exactly two parameter groups, one with opt="muon" and one with
-        # opt="adam".
-        assert isinstance(params, list)
-        assert len(params) == 2
-        assert isinstance(params[0], dict)
-        assert isinstance(params[1], dict)
-        opts = [param_group["opt"] for param_group in params]
-        assert "muon" in opts and "adam" in opts
+        assert isinstance(muon_params, list)
+        assert isinstance(adam_params, list)
 
-        defaults = dict(
-            lr=lr,
-            wd=wd,
-            momentum=momentum,
-            betas=betas,
-            eps=eps,
-        )
+        self.muon_lr_scale = muon_lr_scale
+        self.ns_steps = ns_steps
+
         if polar_method == "polar_express":
             self.polar_fn = lambda g: PolarExpress(g, steps=ns_steps)
         elif polar_method == "jordan":
@@ -54,17 +48,24 @@ class MuonAdam(torch.optim.Optimizer):
         else:
             raise NotImplementedError
 
+        defaults = dict(
+            lr=lr,
+            wd=wd,
+            momentum=momentum,
+            betas=betas,
+            eps=eps
+        )
+
         # Register all parameters.
+        params = list(muon_params) + list(adam_params)
         super().__init__(params, defaults)
 
-        # Index parameter groups by optimizer name.
-        self.opt_param_groups = {}
-        for param_group in self.param_groups:
-            self.opt_param_groups[param_group["opt"]] = param_group
-
-        # Check parameter sizes for Muon parameters.
-        for p in self.opt_param_groups["muon"]["params"]:
+        for p in muon_params:
             assert p.ndim == 2
+            self.state[p]["muon"] = True
+
+        for p in adam_params:
+            self.state[p]["muon"] = False
 
     def step(self, closure=None, loss=None):
         """Perform a single optimization step.
@@ -77,17 +78,20 @@ class MuonAdam(torch.optim.Optimizer):
         if closure is not None:
             with torch.enable_grad():
                 loss = closure()
-        # Update Muon parameters.
-        group = self.opt_param_groups["muon"]
+
+        group = self.param_groups[0]
         lr = group["lr"]
         wd = group["wd"]
         momentum = group["momentum"]
+        beta1, beta2 = group["betas"]
+        eps = group["eps"]
 
+        # Update Muon parameters.
         for p in group["params"]:
-            g = p.grad
-            if g is None:
-                continue
             state = self.state[p]
+            g = p.grad
+            if not state["muon"] or g is None:
+                continue
 
             # Update momentum.
             if "momentum_buffer" not in state:
@@ -98,20 +102,14 @@ class MuonAdam(torch.optim.Optimizer):
             # Apply update.
             u = self.polar_fn(buf)
             p.data.mul_(1 - lr * wd)
-            p.data.add_(u, alpha=-lr)
+            p.data.add_(u, alpha=-lr * self.muon_lr_scale)
 
         # Update Adam parameters.
-        group = self.opt_param_groups["adam"]
-        lr = group["lr"]
-        wd = group["wd"]
-        beta1, beta2 = group["betas"]
-        eps = group["eps"]
-
         for p in group["params"]:
-            g = p.grad
-            if g is None:
-                continue
             state = self.state[p]
+            g = p.grad
+            if state["muon"] or g is None:
+                continue
 
             # Update momentum and second moment estimate.
             if "momentum_buffer" not in state:
@@ -121,6 +119,7 @@ class MuonAdam(torch.optim.Optimizer):
             buf2 = state["sq_momentum_buffer"]
             buf.lerp_(g, 1.0 - beta1)
             buf2.lerp_(g.square(), 1.0 - beta2)
+
             # Apply update.
             g = buf / (eps + buf2.sqrt())
             p.data.mul_(1 - lr * wd)
