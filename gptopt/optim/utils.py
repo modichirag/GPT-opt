@@ -8,6 +8,7 @@ from .momo_adam import MomoAdam
 from .muon import Muon
 from .muonadam import MuonAdam
 from .muonadam_momo import MuonAdamMomo
+from .muonmax_momo import MuonMaxMomo
 from .nesgd import NESGD
 from .sign_gd import SignGD
 from .lion import Lion
@@ -134,6 +135,17 @@ def get_optimizer(opt_config: dict, lr = 1e-3) -> Tuple[torch.optim.Optimizer, d
                   'wd': opt_config.get('weight_decay', 0),
                   'momentum': opt_config.get('momentum', 0.95),
                   'truncate_loss': opt_config.get('truncate_loss', 0.0),
+                  'stale_nuc': opt_config.get('stale_nuc', True),
+                 }
+
+    elif name == "muonmax-momo":
+        opt_obj = MuonMaxMomo
+        hyperp = {'lr': lr,
+                  'muon_lr_scale': opt_config.get('muon_lr_scale', 10.0),
+                  'wd': opt_config.get('weight_decay', 0),
+                  'momentum': opt_config.get('momentum', 0.95),
+                  'truncate_loss': opt_config.get('truncate_loss', 0.0),
+                  'stale_nuc': opt_config.get('stale_nuc', True),
                  }
 
     elif 'muon' in name:
