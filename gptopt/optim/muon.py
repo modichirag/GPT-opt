@@ -112,7 +112,9 @@ class Muon(torch.optim.Optimizer):
         adamw_lr: The learning rate for the internal AdamW.
         adamw_betas: The betas for the internal AdamW.
         adamw_eps: The epsilon for the internal AdamW.
-        adamw_wd: The weight decay for the internal AdamW.
+        split_heads: `False` means treat W_QKV and W_O as large matrices. `True` means split them into heads and treat each head as a separate matrix for the purpose of orthogonalization. `"partial"` means split W_QKV into W_Q, W_K and W_V but do not split these into heads.
+        nheads: The number of heads, needed if split_heads is True.
+        polar_args: A dictionary of additional arguments to pass to the polar factorization method.
     """
     def __init__(self,
                  named_params,
@@ -159,15 +161,15 @@ class Muon(torch.optim.Optimizer):
         params = list(muon_params)
         params.extend(adamw_params)
         self.split_heads = split_heads
-        if self.split_heads:
+        if self.split_heads == True:
             assert nheads is not None, "nheads must be specified if split_heads is True"
             self.nheads = nheads
         super().__init__(params, defaults)
         
         # Sort parameters into those for which we will use Muon, and those for which we will not
-# Use Muon for every parameter in muon_params which is >= 2D and doesn't look like an embedding or head layer
+        # Use Muon for every parameter in muon_params which is >= 2D and doesn't look like an embedding or head layer
         for p, p_name in zip(muon_params, muon_params_names):
-            if not self.split_heads: assert p.ndim == 2, p.ndim
+            if (self.split_heads == False): assert p.ndim == 2, p.ndim
             self.state[p]["use_muon"] = True
             if p_name.endswith("attn.c_attn.weight"):
                 self.state[p]["is_W_QKV"] = True
@@ -232,8 +234,6 @@ class Muon(torch.optim.Optimizer):
                 g = p.grad
                 if g is None:
                     continue
-                if (g.ndim > 2) and not (self.split_heads):
-                    g = g.view(g.size(0), -1)
 
                 assert g is not None
                 
@@ -248,28 +248,33 @@ class Muon(torch.optim.Optimizer):
                 else:
                     g = buf
 
-                if self.split_heads and self.state[p].get("is_W_QKV", False):
-                    # For W_QKV, we split the gradients into 3 heads and process them separately
-                    # print("before", g.shape, self.nheads)
-                    old_shape = g.shape
-                    g = g.reshape(3 * self.nheads, g.shape[0] // (3 * self.nheads), g.shape[1])
-                    # print("after", g.shape)
-                elif self.split_heads and self.state[p].get("is_W_O", False) and self.split_heads:
-                    # print("before", g.shape, self.nheads)
-                    old_shape = g.shape
-                    g = g.reshape(g.shape[0], self.nheads, g.shape[1] // self.nheads).transpose(0, 1)
-                    # print("after", g.shape)
-                    # For W_O, we split the gradients into 3 heads and process them separately
+                old_shape = g.shape
+                if (self.split_heads == True):
+                    if self.state[p].get("is_W_QKV", False):
+                        # For W_QKV, we split the gradients into 3 pieces with nheads subpieces and process them separately
+                        # print("before", g.shape, self.nheads)
+                        g = g.reshape(3 * self.nheads, g.shape[0] // (3 * self.nheads), g.shape[1])
+                        # print("after", g.shape)
+                    elif self.state[p].get("is_W_O", False):
+                        # print("before", g.shape, self.nheads)
+                        # NOTE: This transposing doesn't seem necessary but I guess it's nice for consistency?
+                        g = g.reshape(g.shape[0], self.nheads, g.shape[1] // self.nheads).transpose(0, 1)
+                        # print("after", g.shape)
+                        # For W_O, we split the gradients into 3 heads and process them separately
+                elif (self.split_heads == "partial"):
+                    if self.state[p].get("is_W_QKV", False):
+                        # For W_QKV, we split the gradients into W_Q, W_K and W_V and process them separately
+                        g = g.reshape(3, g.shape[0] // 3, g.shape[1])
 
                 # Use the selected polar factorization method
                 u = self.polar_factorizer(g, group["ns_steps"])
-                
-                if self.split_heads and self.state[p].get("is_W_QKV", False):
-                    g = g.reshape(old_shape)
-                    u = u.reshape(old_shape)
-                elif self.split_heads and self.state[p].get("is_W_O", False):
+
+                if (self.split_heads == True) and self.state[p].get("is_W_O", False):
                     g = g.transpose(0, 1).reshape(old_shape)
                     u = u.transpose(0, 1).reshape(old_shape)
+                else:
+                    g = g.reshape(old_shape)
+                    u = u.reshape(old_shape)
 
                 # scale update
                 adjusted_lr = self.adjust_lr_for_muon(
