@@ -135,21 +135,21 @@ class MuonMaxMomo(torch.optim.Optimizer):
                 current_loss_model += torch.sum(torch.mul(p.data, p.grad.data))
                 new_loss_model += torch.sum(torch.mul(p.data, buf.data))
 
-                # Compute dual norm of layer momentum and add to running sum to compute
-                # dual norm of global momentum.
-                if state["muon"]:
-                    if not self.stale_nuc or "prev_nuc_norm" not in state:
-                        # Compute nuclear norm from polar factor.
-                        m = state["momentum_buffer"]
-                        u = self.polar_fn(m)
-                        muon_dual_norm += (m.bfloat16() * u).sum()
-                    else:
-                        # Reuse stale nuclear norm.
-                        muon_dual_norm += state["prev_nuc_norm"]
-                else:
+            # Compute dual norm of layer momentum and add to running sums to compute
+            # dual norm of global momentum.
+            if state["muon"]:
+                if not self.stale_nuc or "prev_nuc_norm" not in state:
+                    # Compute nuclear norm from polar factor.
                     m = state["momentum_buffer"]
-                    v = state["sq_momentum_buffer"]
-                    adam_sq_dual_norm += torch.sum(m ** 2 / (eps + v.sqrt()))
+                    u = self.polar_fn(m)
+                    muon_dual_norm += (m.bfloat16() * u).sum()
+                else:
+                    # Reuse stale nuclear norm.
+                    muon_dual_norm += state["prev_nuc_norm"]
+            else:
+                m = state["momentum_buffer"]
+                v = state["sq_momentum_buffer"]
+                adam_sq_dual_norm += torch.sum(m ** 2 / (eps + v.sqrt()))
 
         global_dual_norm = torch.sqrt(self.muon_lr_scale * muon_dual_norm ** 2 + adam_sq_dual_norm)
 
@@ -174,7 +174,7 @@ class MuonMaxMomo(torch.optim.Optimizer):
             m = state["momentum_buffer"]
             u = self.polar_fn(m)
             p.data.mul_(1 - lr * wd)
-            p.data.add_(u, alpha=-current_lr * self.muon_lr_scale)
+            p.data.add_(u, alpha=-current_lr * self.muon_lr_scale * muon_dual_norm)
 
             # Store nuclear norm for next round, if necessary.
             if self.stale_nuc:
