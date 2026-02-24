@@ -1,5 +1,4 @@
 import torch
-import math
 
 from .polar import zeropower_via_newtonschulz5, PolarExpress, SVDPolarFactor
 
@@ -38,7 +37,7 @@ class SpectralNorm:
         if self.nuc_approx is None or (self.nuc_approx == "past" and "past_nuc" not in state):
             # If G = UDV^T, then nuc(G) = tr(G @ UV^T).
             u = self.polar_fn(g)
-            nuc = (g.bfloat16() * u).sum()
+            nuc = (g * u).sum()
         elif self.nuc_approx == "fro":
             nuc = torch.linalg.matrix_norm(g, ord="fro")
         elif self.nuc_approx == "past":
@@ -388,7 +387,7 @@ class NESGD(torch.optim.Optimizer):
                     if "past_nuc" not in state:
                         state["past_nuc"] = torch.zeros(1, device=p.device)
                     # If G = UDV^T, then nuc(G) = tr(G @ UV^T).
-                    state["past_nuc"] = (pre_lmo.bfloat16() * post_lmo).sum()
+                    state["past_nuc"] = (pre_lmo * post_lmo).sum() / self.spectral_scale
 
                 # Apply layer-wise scaling to lr.
                 lr_scale = lr_scalings[p]

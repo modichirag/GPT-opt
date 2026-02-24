@@ -1,5 +1,4 @@
 import torch
-import math
 
 from .polar import zeropower_via_newtonschulz5, PolarExpress, SVDPolarFactor
 

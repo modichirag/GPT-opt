@@ -1,5 +1,4 @@
 import torch
-import math
 
 from .polar import zeropower_via_newtonschulz5, PolarExpress, SVDPolarFactor
 
@@ -140,7 +139,7 @@ class MuonAdamMomo(torch.optim.Optimizer):
                         # Compute nuclear norm from polar factor.
                         m = state["momentum_buffer"]
                         u = self.polar_fn(m)
-                        global_dual_norm += self.muon_lr_scale * (m.bfloat16() * u).sum()
+                        global_dual_norm += self.muon_lr_scale * (m * u).sum()
                     else:
                         # Reuse stale nuclear norm.
                         global_dual_norm += self.muon_lr_scale * state["prev_nuc_norm"]
@@ -176,7 +175,7 @@ class MuonAdamMomo(torch.optim.Optimizer):
 
             # Store nuclear norm for next round, if necessary.
             if self.stale_nuc:
-                state["prev_nuc_norm"] = (m.bfloat16() * u).sum()
+                state["prev_nuc_norm"] = (m * u).sum()
 
         # Update Adam parameters.
         for p in group["params"]:

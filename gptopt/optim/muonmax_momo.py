@@ -1,5 +1,4 @@
 import torch
-import math
 
 from .polar import zeropower_via_newtonschulz5, PolarExpress, SVDPolarFactor
 
@@ -26,7 +25,7 @@ class MuonMaxMomo(torch.optim.Optimizer):
         muon_params,
         adam_params,
         lr=1e-3,
-        muon_lr_scale=10,
+        muon_lr_scale=10.0,
         wd=0.1,
         momentum=0.95,
         ns_steps=5,
@@ -142,7 +141,7 @@ class MuonMaxMomo(torch.optim.Optimizer):
                     # Compute nuclear norm from polar factor.
                     m = state["momentum_buffer"]
                     u = self.polar_fn(m)
-                    muon_dual_norm += (m.bfloat16() * u).sum()
+                    muon_dual_norm += (m * u).sum()
                 else:
                     # Reuse stale nuclear norm.
                     muon_dual_norm += state["prev_nuc_norm"]
@@ -178,7 +177,7 @@ class MuonMaxMomo(torch.optim.Optimizer):
 
             # Store nuclear norm for next round, if necessary.
             if self.stale_nuc:
-                state["prev_nuc_norm"] = (m.bfloat16() * u).sum()
+                state["prev_nuc_norm"] = (m * u).sum()
 
         # Update Adam parameters.
         for p in group["params"]:
