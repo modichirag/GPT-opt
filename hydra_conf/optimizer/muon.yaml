@@ -1,0 +1,8 @@
+optimizer_params:
+  name: muon
+  lr: 0.02
+  weight_decay: 0.1
+  momentum: 0.95
+  ns_steps: 5
+  lr_schedule: warm-up-cosine
+  warm_up_fraction: 0.1

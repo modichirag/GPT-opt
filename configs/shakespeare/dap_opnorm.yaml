@@ -1,0 +1,40 @@
+# config.yaml
+optimizer_params:
+  - name: dap-opnorm
+    lr: 0.01
+    weight_decay: 0.1
+    momentum: 0.95
+    ns_steps: 5
+    lr_schedule: warm-up-cosine
+    warm_up_fraction: 0.1
+
+training_params:
+  tokens_processed: 2048
+  val_tokens_processed: 2048
+  batch_size: 2
+  num_epochs: 1
+  context_length: 512
+  gradnorm: 1.0
+  tensorcore_precision: high
+  autocast: True
+  mixed_precision: bfloat16
+  compile: False
+
+logging_params:
+  val_tokens_processed: 2048
+  log_step: 50
+  val_step: 50
+  save_ckpt_step: 500
+  load_ckpt_step: 0
+  keep_last: 2
+  ckpt_dir: ""
+
+gpt_model:
+  n_embd: 768
+  n_layer: 12
+  n_head: 12
+  vocab_size: 50257
+  flash_attention: True
+
+dataset:
+  name: "tiny_shakespeare"

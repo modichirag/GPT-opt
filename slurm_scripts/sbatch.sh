@@ -3,6 +3,7 @@
 #SBATCH --cpus-per-task=4
 #SBATCH --gpus-per-task=1
 #SBATCH --time=24:00:00
+#SBATCH --constraint=a100
 #SBATCH --output=slurm_logs/slurm_job_%j.out
 #SBATCH --error=slurm_logs/slurm_job_%j.err
 

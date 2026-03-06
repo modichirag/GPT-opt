@@ -98,9 +98,9 @@ if [ "$mode" = "NODES" ]; then
     total_tasks=$(( nodes * 4 ))
     sbatch --partition="$partition" --nodes="$nodes" --ntasks="$total_tasks" --job-name="$group_name" slurm_scripts/sbatch.sh
 else
-    # Default SPREAD mode (recommended):
+    # Default SPREAD mode:
     #   - Request <gpus> total tasks (1 GPU per task from sbatch.sh)
-    #   - Allow SLURM to scatter across multiple nodes by overriding --nodes=1 with a range.
+    #   - Force a single node to avoid cross-node disBatch engine srun gres issues.
     gpus="$count"
     sbatch --partition="$partition" --ntasks="$gpus" --job-name="$group_name" slurm_scripts/sbatch.sh
 fi

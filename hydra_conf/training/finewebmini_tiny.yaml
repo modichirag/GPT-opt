@@ -1,0 +1,13 @@
+training_params:
+  tokens_processed: 262144
+  val_tokens_processed: 8388608
+  batch_size: 8
+  num_epochs: 1
+  context_length: 1024
+  gradnorm: 1.0
+  tensorcore_precision: highest
+  autocast: True
+  mixed_precision: bfloat16
+  compile: True
+  mb_subsampling: null
+  global_batch_size: ${div:${.tokens_processed}, ${.context_length}}

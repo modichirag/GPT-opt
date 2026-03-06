@@ -18,7 +18,7 @@ OmegaConf.register_new_resolver("div", lambda x, y: x // y)
 
 @hydra.main(version_base=None, config_path="hydra_conf", config_name="config")
 def main(config : DictConfig):
-    set_seed(42)
+    set_seed(config.get('seed', 42))
 
     # Establish Hydra run directory for saving outputs
     hydra_run_dir = HydraConfig.get().runtime.output_dir
@@ -80,7 +80,8 @@ def main(config : DictConfig):
         print(f"Training with optimizer {opt_config['name']} and learning rate {opt_config['lr']}")
         
     # Generate hash for the current optimizer configuration
-    config_hash = hash_config(OmegaConf.to_container(opt_config), OmegaConf.to_container(training_params), OmegaConf.to_container(model_config))
+    opt_config_for_hash = {**OmegaConf.to_container(opt_config), 'seed': config.get('seed', 42)}
+    config_hash = hash_config(opt_config_for_hash, OmegaConf.to_container(training_params), OmegaConf.to_container(model_config))
     file_name = f"{opt_config['name']}-lr-{opt_config['lr']}-{opt_config['lr_schedule']}-{config_hash}-world{world_size}"
     output_path = os.path.join(output_dir, file_name + '.json')
     ckpt_dir = os.path.join(ckpt_dir_base, file_name) + '/' if CKPT_DIR != "" else ""
@@ -154,6 +155,7 @@ def main(config : DictConfig):
     # Save
     if master_process:
         logger.name = opt_config['name'] + '-lr-' + str(opt_config['lr'])
+        logger.hyperparams = {**OmegaConf.to_container(opt_config), 'seed': config.get('seed', 42)}
         if os.path.exists(output_path):
             print(f"File {output_path} already exists. Overwriting")
         with open(output_path, 'w') as file:

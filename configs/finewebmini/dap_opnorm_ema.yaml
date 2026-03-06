@@ -1,0 +1,57 @@
+# Sweep ema_beta values for DAPOpNorm at lr=0.05 (high-lr instability fix)
+optimizer_params:
+  - name: dap-opnorm
+    lr: [0.05]
+    weight_decay: 0.1
+    momentum: 0.95
+    ns_steps: 5
+    lr_schedule: warm-up-cosine
+    warm_up_fraction: 0.1
+    ema_beta: 0.9
+  - name: dap-opnorm
+    lr: [0.05]
+    weight_decay: 0.1
+    momentum: 0.95
+    ns_steps: 5
+    lr_schedule: warm-up-cosine
+    warm_up_fraction: 0.1
+    ema_beta: 0.95
+  - name: dap-opnorm
+    lr: [0.05]
+    weight_decay: 0.1
+    momentum: 0.95
+    ns_steps: 5
+    lr_schedule: warm-up-cosine
+    warm_up_fraction: 0.1
+    ema_beta: 0.99
+
+training_params:
+  tokens_processed: 262144
+  val_tokens_processed: 8388608
+  batch_size: 8
+  num_epochs: 1
+  context_length: 1024
+  gradnorm: 1.0
+  tensorcore_precision: highest
+  autocast: True
+  mixed_precision: bfloat16
+  compile: True
+
+logging_params:
+  val_tokens_processed: 8388608
+  log_step: 50
+  val_step: 50
+  save_ckpt_step: 100
+  load_ckpt_step: 0
+  keep_last: 2
+  ckpt_dir: ""
+
+gpt_model:
+  n_embd: 256
+  n_layer: 2
+  n_head: 4
+  vocab_size: 50257
+  flash_attention: True
+
+dataset:
+  name: "finewebmini"

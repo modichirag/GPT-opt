@@ -7,6 +7,7 @@ from .momo import Momo
 from .momo_adam import MomoAdam
 from .muon import Muon
 from .dap import DAP
+from .dap_opnorm import DAPOpNorm
 from .sign_gd import SignGD
 # from .sps import SPS
 # from .adabound import AdaBoundW
@@ -131,6 +132,22 @@ def get_optimizer(opt_config: dict, lr = 1e-3) -> Tuple[torch.optim.Optimizer, d
                   'use_fstar': True
                   }
         
+    elif 'dap-opnorm' in name:
+        opt_obj = DAPOpNorm
+        hyperp = {'lr': lr,
+                  'wd': opt_config.get('weight_decay', 0.1),
+                  'momentum': opt_config.get('momentum', 0.95),
+                  'nesterov': opt_config.get('nesterov', True),
+                  'ema_beta': opt_config.get('ema_beta', 0.0),
+                  'ns_steps': opt_config.get('ns_steps', 5),
+                  'rcond': opt_config.get('rcond', 1e-3),
+                  'damping': opt_config.get('damping', 0.0),
+                  'opnorm_target': opt_config.get('opnorm_target', None),
+                  'adamw_betas': opt_config.get('betas', (0.95, 0.95)),
+                  'adamw_eps': opt_config.get('eps', 1e-8),
+                  'num_microbatches': opt_config.get('num_microbatches', None),
+                  }
+
     elif 'dap' in name:
         opt_obj = DAP
         scalar = opt_config.get('scalar', False) or 'scalar' in name

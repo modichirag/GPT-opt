@@ -18,8 +18,12 @@ import wandb
 parser = argparse.ArgumentParser(description='Train GPT-2 with optional config file.')
 parser.add_argument('--config', type=str, help='Path to config file', default=None)
 parser.add_argument('--suffix', type=str, help='Path to config file', default='')
+parser.add_argument('--seed', type=int, default=42)
 args = parser.parse_args()
-set_seed(42)
+if args.seed != 42:
+    seed_suffix = f"seed{args.seed}"
+    args.suffix = seed_suffix if not args.suffix else f"{seed_suffix}-{args.suffix}"
+set_seed(args.seed)
 
 # First set up DDP
 ddp = int(os.environ.get('RANK', -1)) != -1 # is this a ddp run?
@@ -152,6 +156,7 @@ for opt_config in list_optimizer_params:
         # Save
         if master_process:
             logger.name = opt_config['name'] + '-lr-' + str(lr)
+            logger.hyperparams = opt_config_copy
             if os.path.exists(output_path):
                 print(f"File {output_path} already exists. Overwriting")
             with open(output_path, 'w') as file:

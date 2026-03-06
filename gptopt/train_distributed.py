@@ -15,6 +15,7 @@ class Logging():
         self.learning_rates = []
         self.grad_norms = []
         self.step_times = []
+        self.diagnostics = {}
 
 
 
@@ -113,6 +114,9 @@ def train(train_dataloader, val_dataloader, model, optimizer, training_params, l
                     optimizer.step(closure=None, loss=loss_accum)
                 else:
                     optimizer.step()
+                if hasattr(optimizer, 'diagnostics'):
+                    for key, vals in optimizer.diagnostics.items():
+                        logger.diagnostics.setdefault(key, []).append(vals)
                 optimizer.zero_grad()
                 if scheduler is not None:
                     scheduler.step()
@@ -162,10 +166,10 @@ def train(train_dataloader, val_dataloader, model, optimizer, training_params, l
                         with open(ckpt_dir + '/log.json', 'w') as file:
                             json.dump(logger.__dict__, file)
                 loss_accum = 0.
-                start_time = time.time() 
+                start_time = time.time()
             step += 1
-            
-            
+
+
         print(f"In rank: {rank}, epoch {epoch+1}, Train Loss: {logger.losses[-1]}")
         print(f"In rank: {rank}, time taken for epoch {epoch+1} : ", time.time() - start_epoch)
         

@@ -1,0 +1,341 @@
+\documentclass[11pt]{article}
+
+\usepackage{amsfonts}    
+\usepackage{color}
+\usepackage{multirow}
+\usepackage{graphicx}
+\usepackage{amssymb,amsmath} % NOT COMATIBLE WITH svjour3
+\usepackage{enumitem}
+\usepackage{fullpage}
+\usepackage{algorithmicx}
+\usepackage[ruled, lined, linesnumbered, commentsnumbered, longend, vlined]{algorithm2e}
+
+
+\newcommand{\SGD}{\texttt{SGD} }
+\newcommand{\DAP}{\texttt{DAP} }
+\newcommand{\ADAM}{\texttt{ADAM} }
+
+\graphicspath{{figs/}}
+\newcommand{\bx}{\mathbf{x}}
+\newcommand{\bd}{\mathbf{d}}
+\newcommand{\bg}{\mathbf{g}}
+\newcommand{\by}{\mathbf{y}}
+\newcommand{\bz}{\mathbf{z}}
+\newcommand{\bw}{\mathbf{w}}
+\newcommand{\dw}{\mathbf{\Delta w}}
+\newcommand{\bq}{\mathbf{q}}
+\newcommand{\bt}{\mathbf{\theta}}
+\newcommand{\red}[1]{\textcolor[rgb]{0.635,0.0780,0.1840}{#1}}
+\parindent 0ex
+\parskip 2ex
+
+\date{}
+
+%% Lawrence commands
+\newcommand{\blue}[1]{\textcolor[rgb]{0,0.33,0.56}{#1}}
+\newcommand{\green}[1]{\textcolor[rgb]{0,0.65,0.33}{#1}}
+\definecolor{shade}{rgb}{0.9,0.9,0.9}
+\usepackage{bm}
+\renewcommand{\vec}[1]{\bm{#1}}
+\newcommand{\mat}[1]{\bm{#1}}
+\newcommand{\Diag}[1]{\mathrm{Diag}\left(#1\right)}
+%% Robert commands
+\DeclareMathOperator{\sign}{sign} 
+\newcommand{\norm}[1]{\| #1\|} 
+\newcommand{\dotprod}[1]{\left< #1\right>} 
+\DeclareMathOperator{\argmininn}{argmin} 
+\DeclareMathOperator{\argmaxinn}{argmax} 
+\newcommand{\argmin}[1]{ \underset{#1}{\argmininn} \;}
+\newcommand{\argmax}[1]{ \underset{#1}{\argmaxinn}\;}
+\usepackage[hidelinks]{hyperref}
+\newcommand{\cD}{\mathcal{ D}}
+\newcommand{\cN}{\mathcal{ N}}
+\newcommand{\cP}{\mathcal{ P}}
+\newcommand{\cW}{\mathcal{ W}}
+\newcommand{\mH}{\mat{ H}}
+\newcommand{\mM}{\mat{ M}}
+\newcommand{\mA}{\mat{ A}}
+\newcommand{\mD}{\mat{ D}}
+\newcommand{\mE}{\mat{ E}}
+\newcommand{\mG}{\mat{ G}}
+\newcommand{\mK}{\mat{ K}}
+\newcommand{\mQ}{\mat{ Q}}
+\newcommand{\mX}{\mat{ X}}
+\newcommand{\mC}{\mat{ C}}
+\newcommand{\mW}{\mat{ W}}
+\newcommand{\DW}{\mat{ \Delta W}}
+\newcommand{\mI}{\mat{ I}}
+\newcommand{\mP}{\mat{ P}}
+\newcommand{\mSig}{\mat{ \Sigma}}
+\newcommand{\mS}{\mat{ S}}
+\newcommand{\mT}{\mat{ T}}
+\newcommand{\mU}{\mat{ U}}
+\newcommand{\mV}{\mat{ V}}
+\newcommand{\mY}{\mat{ Y}}
+\newcommand{\mZ}{\mat{ Z}}
+\newcommand{\mR}{\mat{ R}}
+\newcommand{\mB}{\mat{ B}}
+\newcommand{\ones}{\mat{ 1}}
+\newcommand{\R}{\mathbb{R}}
+\newcommand{\E}[1]{\mathbb{E}\left[ #1\right]}
+\DeclareMathOperator{\traceOp}{tr}  
+\DeclareMathOperator{\Range}{range} 
+\DeclareMathOperator{\Null}{null} 
+\DeclareMathOperator{\rowspace}{rowspace} 
+\DeclareMathOperator{\colspace}{colspace} 
+\DeclareMathOperator{\polar}{polar} 
+\providecommand{\trace}[1]{\traceOp\left(#1\right)}
+% \newcommand{\E}[1]{\mathbb{E}\left[#1\right] } 
+\newcommand{\EE}[2]{\mathbb{E}_{#1}\left[#2\right] } 
+\usepackage{amsthm}
+\usepackage{amsbsy}
+\newcommand{\David}[1]{{\color{blue}{\textbf{David:}} #1}}
+\newcommand{\nikhil}[1]{{\color{purple}{\textbf{Nikhil:}} #1}}
+
+\usepackage{mathtools}
+
+\usepackage{mdframed} 
+\usepackage{thmtools}
+
+\definecolor{shadecolor}{gray}{0.90}
+\declaretheoremstyle[
+headfont=\normalfont\bfseries,
+notefont=\mdseries, notebraces={(}{)},
+bodyfont=\normalfont,
+postheadspace=0.5em,
+spaceabove=6pt,
+mdframed={
+  skipabove=8pt,
+  skipbelow=8pt,
+  hidealllines=true,
+  backgroundcolor={shadecolor},
+  innerleftmargin=4pt,
+  innerrightmargin=4pt}
+]{shaded}
+
+
+\declaretheorem[style=shaded,within=section]{definition}
+\declaretheorem[style=shaded,sibling=definition]{theorem}
+\declaretheorem[style=shaded,sibling=definition]{proposition}
+\declaretheorem[style=shaded,sibling=definition]{assumption}
+\declaretheorem[style=shaded,sibling=definition]{corollary}
+\declaretheorem[style=shaded,sibling=definition]{conjecture}
+\declaretheorem[style=shaded,sibling=definition]{lemma}
+\declaretheorem[style=shaded,sibling=definition]{remark}
+\declaretheorem[style=shaded,sibling=definition]{example}
+
+
+
+% Commenting
+\usepackage[colorinlistoftodos,bordercolor=orange,backgroundcolor=orange!20,linecolor=orange]{todonotes}
+
+
+\newcommand{\rob}[1]{\todo[inline]{\textbf{Robert: }#1}}
+\newcommand{\experiment}[1]{\todo[inline]{\textbf{Experiment: }#1}}
+
+
+\usepackage[hidelinks]{hyperref}
+\usepackage[nameinlink]{cleveref}
+\usepackage[firstinits=true,backend=bibtex,style=alphabetic,citestyle=alphabetic, url =false, arxiv =false, isbn = false, doi = false]{biblatex}
+\bibliography{references}
+
+\hypersetup{colorlinks, citecolor=blue, filecolor=black, urlcolor=blue}
+%%%%%%%%%%%
+
+\title{Data Preconditioned Stochastic Gradients: A new view on data normalization}
+\author{The preconditioned perpetrators } %
+\begin{document}
+
+
+\maketitle
+
+\tableofcontents
+
+\begin{abstract}
+We devise a data dependent preconditioned for applying gradient descent to linear layers.
+\end{abstract}
+
+\rob{TODO:}
+\begin{itemize}
+    \item Compare against the implicit preconditioner used by spectral gradient descent, that is $(\mG_t \mG_t^\top)^{-1/2} \mG_t$
+\end{itemize}
+
+
+\section{Introduction}
+Consider any neural network that has a linear layer. That is,
+we consider a family of functions
+\[ h(\mW) =   h_1(\mW h_0(\mX_0)),\]
+where $\mX_0 \in \R^{d_0 \times b}$, $b$ is the batch dimension, and $\mW \in \R^{ d_2 \times d_1}$ is a matrix of learnable parameters that parametrizes a linear layer. Here $h_1$ and $h_0$ could be simple activations, or be themselves a sequences of compositions with learnable parameters. But here we focus only on the $\mW$ parameters, since we are interested in  how best to update the parameters of a single linear layer.
+To simplify notation  further we also use $\mX = h_0(\mX_0) \in \R^{d_1 \times b}$ to denote the intermediary embedding, and  with an additional loss function $\ell$ we denote the loss with respect to this linear layer as 
+\begin{equation}
+     f(\mW\mX) :=  \ell \circ  h_1(\mW \mX).
+\end{equation}
+Note that $\mX$ depends on the current batch of data, where the training problem with respect to the $\mW$ parameters can be represented as
+\begin{equation}\label{eq:loss-W}
+    \min_{\mW \in \R^{d_2 \times d_1}} \EE{\mX \sim \cP}{ f(\mW\mX)},
+\end{equation}
+where $\mX$ is drawn from a distribution $\cP$ that will depend on both the data distribution, and the prior layers of the neural network. For the remainder of this paper will use the notation given in~\eqref{eq:loss-W}, and $\mX$ can be interpreted as a batch of data.   \texttt{SGD} (Stochastic gradient) type methods applied to~\eqref{eq:loss-W} are given by
+\begin{align}
+    \mbox{Sample }& \mX_t \;\sim \; \cP \\
+    \mbox{Update }&  \mW^{t+1} \;=\;  \mW^{t} - \gamma \mG^t, 
+\end{align}
+where $\mG^t = \left.\nabla_{\mW} f(\mW\mX_t)\right|_{\mW=\mW^t}$ is a stochastic gradient, and $\gamma$ is the step size.
+
+As our notation~\eqref{eq:loss-W} highlights, at the $t$-th step of \texttt{SGD} the current loss over the batch $f(\mW\mX_t)$ only depends on $\mW$ to the extent that it changes the product $\mW\mX_t$. Using this observation, we derive a data dependent norm for gradient descent, that results in a data preconditioneed gradient.
+
+
+
+\begin{algorithm}[H]%[tb]
+    \caption{\texttt{DAP}: Data Preconditioned gradient method. }
+    \label{alg:DAP}
+
+     {\bfseries Initialize:} $\gamma_t \in [0,\;1]$
+     
+    \For{$t=0$ {\bfseries to} $T-1$}{
+     
+     Sample batch $\mX_0 \sim \mathcal{P}$ 
+
+      Store embedding $\mX_t$ in forward pass
+
+     Compute gradient $\mG^t = \nabla_{\mW} f(\mW^t)$
+      
+      $\mP_t$ = \texttt{Schulz}$(\mX_t\mX_t^\top)$
+
+     $\mW^{t+1} \; = \; \mW^t - \gamma_t \mG^t\mP_t $
+    }
+    \KwOut{$\mW^T$}
+\end{algorithm}
+
+
+
+\section{A data preconditioned gradient}
+For the current batch of data $\mX_t \sim \cP$, where $\mX_t \in \R^{d_1,d_0},$ for 
+a step of \SGD can be written as
+\begin{align}
+    \mW^{t+1} &=  \argmin{\mW} \dotprod{\mW- \mW^t, \mG^t } + \frac{1}{2\gamma}\|\mW - \mW^t\|^2. \label{eq:gradgeneral2}
+\end{align}
+where we use $\mG^t$ to denote the gradient of this layer. To choose an appropriate norm in~\eqref{eq:gradgeneral2}, we need to consider how changes in $\mW$ affect the loss.
+In particular, changes in $\mW$ only matter insofar as they change $\mW \mX_t$. Consequently we propose using the pseudo-norm
+\begin{align}
+    \mW^{t+1} &=  \argmin{\mW} \dotprod{\mW- \mW^t, \mG^t } + \frac{1}{2\gamma}\|(\mW - \mW^t)\mX_t\|^2,\label{eq:gradgeneralpseudo}
+\end{align}
+where if there is no unique solution to the above, we suppose the least-norm solution is taken. At first glance, the above may have no solution, since it may happen that we can choose $(\mW - \mW^t)\mX_t=0$ and yet send  the linear term $\dotprod{\mW- \mW^t, \mG^t }$ to negative infinity. But this turns out to now be possible  because of the properties of the gradient matrix. 
+By the chain-rule we have that 
+\begin{equation} \label{eq:chain-rule}
+    \nabla_{\mW} f(\mW \mX) \; =\; \left. \nabla_{\mZ}f(\mZ) \right|_{\mZ = \mW\mX} \mX^\top.    
+\end{equation}
+For short-hand we will use 
+Let  $\hat{\mG}^t:= \left. \nabla_{\mZ}f(\mZ) \right|_{\mZ = \mW^t\mX_t}$ and $\mG^t = \nabla_{\mW} f(\mW^t \mX_t) = \hat{\mG}_t \mX_t^\top$, thus
+\begin{equation}\label{eq:chain-rule-G}
+    \mG^t  \; = \;  \hat{\mG}_t \mX_t^\top.
+\end{equation}
+Using the above identity in~\eqref{eq:gradgeneralpseudo} gives
+\begin{align}
+    \mW^{t+1} &=  \argmin{\mW} \dotprod{(\mW- \mW^t)\mX_t, \hat{\mG}^t } + \frac{1}{2\gamma}\|(\mW - \mW^t)\mX_t\|^2,\label{eq:gradgeneralpseudoXT}
+\end{align}
+This problem now always has a solution, and a unique least-norm solution.
+
+
+
+\begin{lemma} For $\mW^t,\mG^t \in \R^{d_2 \times d_1}$ and $\mX_t\in\R^{d_1 \times d_0}$, 
+the least-norm solution with respect to $\|\mW-\mW^t\|_F$ of 
+\begin{align}
+    \mW^{t+1} &=  \argmin{\mW} \dotprod{\mW- \mW^t, \mG^t } + \frac{1}{2\gamma}\|(\mW - \mW^t)\mX_t\|_F^2,\label{eq:gradgeneralpseudoF}
+\end{align}
+is given by
+\begin{equation}
+     \mW^{t+1} \; =  \;\mW^t -\gamma \mG^t (\mX_t\mX_t^\top)^\dagger. \label{eq:gradgeneralpseudoF-sol}
+\end{equation}
+\end{lemma}
+\begin{proof}
+For brevity let $\DW : = \mW- \mW^t,$ $\mX = \mX_t$ and $\mG = \mG^t.$
+
+Considering the equivalent problem~\eqref{eq:gradgeneralpseudoXT}, and completing the squares gives
+\begin{equation}
+    \min_{\DW} \| \DW \mX + \gamma \hat{\mG}\|_F^2.
+\end{equation}
+The least norm solution with respect to $\|\DW\|$ is now given by taking the pseudo-inverse of $\mX,$ gives 
+\[\DW = - \gamma \hat{\mG}\mX^\dagger. \]
+Now using the identity $$ \mX^\dagger = \mX^\top(\mX\mX^\top)^{\dagger} $$
+gives
+\[\DW = - \gamma \hat{\mG}\mX^\top(\mX\mX^\top)^{\dagger} = - \gamma  \mG (\mX\mX^\top)^{\dagger}, \]which is the solution.
+\end{proof}
+
+\begin{lemma}\label{lemma:rotationsdual}
+    Let $\|\cdot\|$ be a unitarily invariant norm. Consider an arbitrary real matrix  $\bm{G}$. Define
+    \begin{equation*}
+        \bm{G}_* :=\argmax{\|\mT\| = 1}\dotprod{\mT,\mG}.
+    \end{equation*}
+    \David{Uniqueness???}
+    If $\bm{V}$ is a matrix with orthonormal columns, then
+    \begin{equation*}
+        \bm{G}_* \mV^{\top} = (\bm{G} \mV^{\top})_*
+    \end{equation*}
+\end{lemma}
+\begin{proof}
+    \David{This might be in a textbook} Note that by Hölder's inequality \cite[Exercise IV.2.12]{bhatia} we have $\dotprod{\mT,\mG\mV^{\top}} \leq \|\mT\| \|\mG\mV^{\top}\|_* = \|\mG\|_*$, where we used that $\|\cdot\|_*$ is unitarily invariant \cite[p.96]{bhatia}. Equality can be achieved by setting $\mT = \mG_* \mV^{\top}$. 
+\end{proof}
+
+\begin{lemma} Let $\mW^t,\mG^t \in \R^{d_2 \times d_1}$ and $\mX_t\in\R^{d_1 \times d_0}$. 
+    For any unitarily invariant norm $\|\cdot\|$, the solution \David{uniqueness?} to 
+    \begin{align}
+    \min\limits_{\mW} \dotprod{\mW- \mW^t, \mG^t } + \frac{1}{2\gamma}\|(\mW - \mW^t)\mX_t\|^2,\label{eq:gradgeneralpseudo-2}
+\end{align}
+is given by
+    \begin{equation}
+       \mW^{t+1} = \mW^t - \gamma  \|\mG^t \mX_t^{\dagger \top}\|_*(\mG^t \mX_t^{\dagger \top})_* \mX_t^{\dagger}
+    \end{equation}
+    where thus star operator returns the dual gradient, that is \David{Uniqueness???}
+    \begin{align}
+        \mG_*  & := \argmax{\|\mT\|=1} \dotprod{\mT, \mG} \\
+        \|\mG\|_* 
+        &= \max_{\|\mT\|=1} \dotprod{\mT, \mG}
+    \end{align}
+
+\end{lemma}
+\begin{proof}  
+Define $\DW^t : = \mW- \mW^t$. 
+By recalling $\mG_t = \hat{\mG}_t \mX_t^{\top}$ we can consider the equivalent problem~\eqref{eq:gradgeneralpseudoXT}
+\begin{equation}\label{eq:equivalent_problem}
+    \min\limits_{\DW^t} \dotprod{\DW^t\mX_t, \hat{\mG}^t } + \frac{1}{2\gamma}\|\DW^t \mX_t\|^2    
+\end{equation}
+Let $\mP_{\mX_t}$ denote the orthogonal projection onto $\Range(\mX_t)$. Note that if $\DW^t$ is a solution to \eqref{eq:equivalent_problem} then so is $\DW^t\mP_{\mX_t}$. We will constrain our solution set to be least $\|\cdot\|$-norm solutions. By Fan's dominance theorem \cite[Theorem IV.2.2]{bhatia} we have $\|\DW^t\mP_{\mX_t}\| \leq \|\DW^t\|$. Hence, a least $\|\cdot\|$-norm solution satisfies
+\[ \DW^t = \DW^t\mP_{\mX} \Leftrightarrow\rowspace(\DW^t) \subset \Range(\mX_t).\]
+In other words, if $\mX_t = \mU \bm{\Sigma} \mV^{\top}$ is the rank-reduced SVD of $\bm{X}_t$ so that $\bm{\Sigma}$ is a square full-rank diagonal matrix, we have
+\begin{equation*}
+    \DW^t = \mK \mU^{\top},
+\end{equation*}
+for some matrix $\mK$. Substituting $\DW^{t} \bm{X}^t = \bm{K} \bm{\Sigma} \bm{V}^{\top}$ into \eqref{eq:equivalent_problem} and using that $\|\cdot\|$ is unitarily invariant yields the following reformulation of \eqref{eq:equivalent_problem}
+\[ \min_{\bm{K}} \dotprod{\mK\bm{\Sigma}, \hat{\mG}^t\mV } + \frac{1}{2\gamma} \|\mK\bm{\Sigma}\|^2.\]
+Noting that $\bm{\Sigma}$ is square non-singular and substituting $\hat{\mK} = \bm{K}\bm{\Sigma}$ yields
+\[ \min_{\hat{\bm{K}}} \dotprod{\hat{\mK}, \hat{\mG}^t\mV } + \frac{1}{2\gamma} \|\hat{\mK}\|^2.\]
+Note that since $\DW^t = \hat{\mK} \bm{\Sigma}^{-1} \mU^{\top}$, $\bm{\Sigma}$ is non-singular, and $\mU$ has orthogonal columns, we can conclude $\DW^t = \bm{0}$ if and only if $\hat{\mK} = \bm{0}$. Hence, we can always  write $\hat{\mK} = c\mT$ where $c \geq 0$ and $\mT$ is some matrix satisfying $\|\mT\| = 1$. Inserting this formulation gives the the following optimization problem over $c \geq 0$ and $\mT$ 
+\begin{equation*}
+    \min\limits_{\|\mT\| = 1, c \geq 0} c\dotprod{\mT,\hat{\mG}^t \mV} + \frac{c^2}{2\gamma} = \min\limits_{c \geq 0} c \left(\min\limits_{\|\bm{T}\| = 1} \dotprod{\mT,\hat{\mG} \mV}\right) + \frac{c^2}{2\gamma}.
+\end{equation*}
+Hence, $\mT = - (\hat{\mG}^t \mV)_*$ and $c =\gamma\|\hat{\mG}^t \mV\|_*$. Consequently,
+\begin{equation*}
+    \DW^t = c\mT \bm{\Sigma}^{-1} \mU^{\top} = -\gamma \|\hat{\mG}^t \mV\|_*(\hat{\mG}^t \mV)_*\bm{\Sigma}^{-1} \bm{U}^{\top}.
+\end{equation*}
+Noting that $\mG^t \mX_t^{\dagger \top} = \hat{\mG}^t \mX_t^{\top} \mX_t^{\dagger \top} = \hat{\mG}^t \mV\mV^{\top}$, using \Cref{lemma:rotationsdual}, and that the dual norm of a unitarily invariant norm is also unitarily invariant \cite[p.96]{bhatia} gives
+\begin{align*}
+    \DW^t &= -\gamma \|\hat{\mG}^t \mV\|_*(\hat{\mG}^t \mV)_*\bm{\Sigma}^{-1} \bm{U}^{\top}\\
+    &=-\gamma \|\hat{\mG}^t \mV\mV^{\top}\|_* (\hat{\mG}^t \mV)_* \mV^{\top} \mV \bm{\Sigma}^{-1} \bm{U}^{\top}\\
+    &=-\gamma \|\hat{\mG}^t \mV\mV^{\top}\|_* (\hat{\mG}^t \mV\mV^{\top})_* \mV \bm{\Sigma}^{-1} \bm{U}^{\top}\\
+    &=- \gamma  \|\mG^t \mX_t^{\dagger \top}\|_*(\mG^t \mX_t^{\dagger \top})_* \mX_t^{\dagger}.
+\end{align*}
+Recalling that $\DW^{t} = \mW - \mW^t$ yields the desired result.
+\end{proof}
+
+\David{Old stuff commented here}
+
+\nikhil{Note that if we define $\mC := \mX \mX^\top$, then
+\begin{align*}
+    \norm{\mW \mX}_{\mathrm{op}}^2 &= \lambda_{\max}(\mW \mX \mX^\top \mW)\\ 
+    &= \lambda_{\max}(\mW \mC \mW)\\ 
+    &= \norm{\mW \mC^{1/2}}_{\mathrm{op}}^2.
+\end{align*}
+Therefore in the above we can replace $\mX_t^{\dagger}$ with $\mC^{-1/2}$. The upshot is that now $\Delta \mW^t$ is efficiently computable with no batch size dependence. Equivalently we can think of the regularizer being given by the $\norm{\cdot}_{\mC^{-1} \to \ell_2}$ operator norm. In KFAC style we can also use the backward covariance to change the output space norm.
+}
+
+\end{document}

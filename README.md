@@ -33,6 +33,15 @@ python run_hydra.py \
 
 ### SLURM Submissions
 
+#### Lightweight Wrappers (`submit.sh`, `submit_hydra.sh`)
+
+The repository root contains two simple helpers for one-off jobs:
+
+- `submit.sh` (legacy): submits a single `run.py --config <yaml>` invocation on one GPU. It is useful if you still rely on the pre-Hydra YAML configs.
+- `submit_hydra.sh`: submits a Hydra-driven bash script via `torchrun` with one worker per GPU. Pass the script path as the first argument, followed by any overrides; the script runs unchanged on each rank.
+
+They both inline an `sbatch` block, so they are self-contained alternatives to the richer launchers below. For sweeps or fleet-scale runs prefer the `slurm_scripts/` entry points.
+
 #### 1. Standard Parameter Sweeps (`submit.sh`)
 
 For running grid searches across multiple GPUs:

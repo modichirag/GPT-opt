@@ -1,0 +1,8 @@
+config:
+  n_embd: 256
+  n_layer: 2
+  n_head: 4
+  vocab_size: 50257
+  flash_attention: True
+
+name: gpt-tiny

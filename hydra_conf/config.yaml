@@ -7,3 +7,5 @@ defaults:
   - hydra: default
   - paths: batch-lr-wd-sweep
   - _self_
+
+seed: 42

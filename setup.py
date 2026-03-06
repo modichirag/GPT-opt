@@ -21,5 +21,6 @@ setup(
         'hydra-core',
         'hydra-colorlog',
         'rich',
+        'fire',
     ],
 )

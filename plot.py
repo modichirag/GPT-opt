@@ -28,11 +28,15 @@ def load_outputs(output_dir):
 
 
 def plot_final_loss_vs_lr(outputs, colormap, outfilename, val=False):
-    """Plot final loss versus learning rate as lines for each method."""
+    """Plot final loss versus learning rate as lines for each method.
+
+    When multiple seed runs share the same (method, lr), plots mean ± std error bars.
+    """
     fig, ax = plt.subplots(figsize=(8, 4))  # Increased width to accommodate side legend
+    # methods[name][lr] = list of final losses (one per seed)
     methods = {}
 
-    # Group final losses and learning rates by method
+    # Group final losses by (method, lr)
     for output in outputs:
         name, lr = output['name'].split('-lr-')
         lr = float(lr)
@@ -41,21 +45,26 @@ def plot_final_loss_vs_lr(outputs, colormap, outfilename, val=False):
                 continue
             final_loss = output['val_losses'][-1]
         else:
-            final_loss = output['losses'][-1]  # Get the final loss
+            final_loss = output['losses'][-1]
         if name not in methods:
-            methods[name] = {'lrs': [], 'losses': []}
-        methods[name]['lrs'].append(lr)
-        methods[name]['losses'].append(final_loss)
+            methods[name] = {}
+        methods[name].setdefault(lr, []).append(final_loss)
 
     # Plot each method as a line
     lower_bound = 3.2
     upper_bound = 0.0
-    for name, data in methods.items():
-        sorted_indices = sorted(range(len(data['lrs'])), key=lambda i: data['lrs'][i])  # Sort by learning rate
-        sorted_lrs = [data['lrs'][i] for i in sorted_indices]
-        sorted_losses = [data['losses'][i] for i in sorted_indices]
-        ax.plot(sorted_lrs, sorted_losses, label=name, color=colormap[name], linewidth=2, marker='.')
-        current_ub = np.max(sorted_losses)
+    for name, lr_dict in methods.items():
+        sorted_lrs = sorted(lr_dict.keys())
+        means = [np.mean(lr_dict[lr]) for lr in sorted_lrs]
+        stds = [np.std(lr_dict[lr]) for lr in sorted_lrs]
+        n_seeds = max(len(lr_dict[lr]) for lr in sorted_lrs)
+        color = colormap.get(name, None)
+        if n_seeds > 1:
+            ax.errorbar(sorted_lrs, means, yerr=stds, label=name, color=color,
+                        linewidth=2, marker='.', capsize=3)
+        else:
+            ax.plot(sorted_lrs, means, label=name, color=color, linewidth=2, marker='.')
+        current_ub = np.max(means)
         if current_ub > upper_bound:
             upper_bound = current_ub
     upper_bound *= 1.1
