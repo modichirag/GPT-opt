@@ -143,6 +143,7 @@ def get_optimizer(opt_config: dict, lr = 1e-3) -> Tuple[torch.optim.Optimizer, d
                   'rcond': opt_config.get('rcond', 1e-3),
                   'damping': opt_config.get('damping', 0.0),
                   'opnorm_target': opt_config.get('opnorm_target', None),
+                  'per_layer_damping': opt_config.get('per_layer_damping', False),
                   'adamw_betas': opt_config.get('betas', (0.95, 0.95)),
                   'adamw_eps': opt_config.get('eps', 1e-8),
                   'num_microbatches': opt_config.get('num_microbatches', None),

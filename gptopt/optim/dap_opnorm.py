@@ -33,6 +33,7 @@ class DAPOpNorm(Optimizer):
         rcond=1e-3,
         damping=0.0,
         opnorm_target=None,
+        per_layer_damping=False,
         adamw_betas=(0.95, 0.95),
         adamw_eps=1e-8,
         num_microbatches: Optional[int] = None,
@@ -87,6 +88,7 @@ class DAPOpNorm(Optimizer):
         self.rcond = float(rcond)
         self.damping = float(damping)
         self.opnorm_target = float(opnorm_target) if opnorm_target is not None else None
+        self.per_layer_damping = per_layer_damping
 
         self.dap_modules = []
         self.param_to_module: Dict[nn.Parameter, LinearWithXtX] = {}
@@ -113,25 +115,40 @@ class DAPOpNorm(Optimizer):
                 f"Some DAPOpNorm params not owned by any LinearWithXtX: {missing}"
             )
 
-    def _compute_C_inv_sqrt(self, C: torch.Tensor, damping=None):
+    def _compute_C_inv_sqrt(self, C: torch.Tensor, damping=None, opnorm_target=None):
         """Compute C^{-1/2} via eigendecomposition with optional damping.
 
         Args:
             C: the covariance matrix
-            damping: relative damping coefficient; if None, uses self.damping
+            damping: relative damping coefficient; if None, uses self.damping.
+                Ignored when opnorm_target is set.
+            opnorm_target: if set, compute per-layer relative damping to achieve
+                this target opnorm exactly: delta = (1/opnorm_target^2 - lambda_min) / lambda_max,
+                clamped >= 0.
 
         Returns:
-            (C_inv_sqrt, opnorm, C_eigmax, C_eigmin): C_inv_sqrt is the matrix
+            (C_inv_sqrt, opnorm, C_eigmax, C_eigmin, delta_used): C_inv_sqrt is the matrix
             square root inverse; opnorm = 1/sqrt(min active eigval of C_eff);
             C_eigmax and C_eigmin are the max and min eigenvalues of C *before*
-            damping (among active directions), useful for diagnosing covariance scale.
+            damping (among active directions); delta_used is the relative damping
+            coefficient actually applied (useful when opnorm_target computes it).
         """
-        if damping is None:
-            damping = self.damping
-
         # Single eigendecomposition of C (before damping)
         eigvals_C, eigvecs = torch.linalg.eigh(C.to(torch.float32))
         eigmax_C = eigvals_C[-1].item()
+
+        if opnorm_target is not None:
+            # Compute per-layer delta to hit target opnorm exactly
+            # opnorm = 1/sqrt(lambda_min(C_eff)) = 1/sqrt(lambda_min(C) + delta * lambda_max(C))
+            # => delta = (1/opnorm_target^2 - lambda_min(C)) / lambda_max(C)
+            eigmin_C_raw = eigvals_C[0].item()
+            target_min_eigval = 1.0 / (opnorm_target ** 2)
+            if eigmax_C > 0:
+                damping = max(0.0, (target_min_eigval - eigmin_C_raw) / eigmax_C)
+            else:
+                damping = self.damping
+        elif damping is None:
+            damping = self.damping
 
         # Apply relative damping to eigenvalues directly (avoids second decomp)
         eigvals_eff = eigvals_C + damping * eigmax_C if damping > 0 else eigvals_C
@@ -151,7 +168,7 @@ class DAPOpNorm(Optimizer):
             opnorm = float('inf')
             eigmin_C = 0.0
 
-        return C_inv_sqrt, opnorm, eigmax_C, eigmin_C
+        return C_inv_sqrt, opnorm, eigmax_C, eigmin_C, damping
 
     @torch.no_grad()
     def step(self, closure=None):
@@ -160,7 +177,7 @@ class DAPOpNorm(Optimizer):
             with torch.enable_grad():
                 loss = closure()
 
-        self.diagnostics = {'C_inv_sqrt_opnorm': [], 'C_eigmax': [], 'C_eigmin': [], 'delta_adaptive': None}
+        self.diagnostics = {'C_inv_sqrt_opnorm': [], 'C_eigmax': [], 'C_eigmin': [], 'delta_adaptive': None, 'delta_per_layer': []}
 
         for group in self.param_groups:
             lr = group["lr"]
@@ -195,8 +212,8 @@ class DAPOpNorm(Optimizer):
                 mod.C_accum_sum.zero_()
                 mod.C_accum_count.zero_()
 
-            # First pass: compute adaptive damping from global mean eigmax
-            if self.opnorm_target is not None:
+            # First pass: compute global adaptive damping (skipped for per-layer mode)
+            if self.opnorm_target is not None and not self.per_layer_damping:
                 eigmax_vals = []
                 for p in params:
                     state_p = self.state[p]
@@ -205,8 +222,8 @@ class DAPOpNorm(Optimizer):
                         lam_max = torch.linalg.eigh(C.to(torch.float32))[0][-1].item()
                         eigmax_vals.append(lam_max)
                 if eigmax_vals:
-                    mean_eigmax = sum(eigmax_vals) / len(eigmax_vals)
-                    delta_adaptive = 1.0 / (self.opnorm_target ** 2 * mean_eigmax)
+                    mean_inv_sqrt_eigmax = sum(1.0 / v ** 0.5 for v in eigmax_vals) / len(eigmax_vals)
+                    delta_adaptive = mean_inv_sqrt_eigmax ** 2 / self.opnorm_target ** 2
                 else:
                     delta_adaptive = self.damping
                 self.diagnostics['delta_adaptive'] = delta_adaptive
@@ -239,7 +256,11 @@ class DAPOpNorm(Optimizer):
                 C = self._step_cov.get(p, state.get("C_ema", None))
 
                 if C is not None:
-                    C_inv_sqrt, opnorm, eigmax_C, eigmin_C = self._compute_C_inv_sqrt(C, damping=delta_adaptive)
+                    if self.per_layer_damping and self.opnorm_target is not None:
+                        C_inv_sqrt, opnorm, eigmax_C, eigmin_C, delta_used = self._compute_C_inv_sqrt(C, opnorm_target=self.opnorm_target)
+                        self.diagnostics['delta_per_layer'].append(delta_used)
+                    else:
+                        C_inv_sqrt, opnorm, eigmax_C, eigmin_C, delta_used = self._compute_C_inv_sqrt(C, damping=delta_adaptive)
                     self.diagnostics['C_inv_sqrt_opnorm'].append(opnorm)
                     self.diagnostics['C_eigmax'].append(eigmax_C)
                     self.diagnostics['C_eigmin'].append(eigmin_C)

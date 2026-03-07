@@ -60,6 +60,7 @@ def train(train_dataloader, val_dataloader, model, optimizer, training_params, l
     if master_process: print(f"Accumulate gradient for {grad_accum_steps} steps")
     total_iterations = int(training_params['num_epochs'] * len(train_dataloader) / training_params['tokens_processed'])
     max_grad_norm = training_params['gradnorm'] if training_params['gradnorm'] != 0. else float('inf')
+    max_steps = training_params.get('max_steps', 0)
 
     load_ckpt_step = logging_params['load_ckpt_step']
     if load_ckpt_step != 0:
@@ -169,6 +170,8 @@ def train(train_dataloader, val_dataloader, model, optimizer, training_params, l
                 start_time = time.time()
             step += 1
 
+            if max_steps and opt_step >= max_steps:
+                break
 
         print(f"In rank: {rank}, epoch {epoch+1}, Train Loss: {logger.losses[-1]}")
         print(f"In rank: {rank}, time taken for epoch {epoch+1} : ", time.time() - start_epoch)

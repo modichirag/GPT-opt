@@ -1,4 +1,4 @@
-# Issue: Config bloat in configs/finewebmini/
+# Issue: Config bloat in configs/finewebmini/ (RESOLVED)
 
 ## Problem
 
@@ -9,26 +9,11 @@ to track what was run and why.
 ## Root cause
 
 `run.py` takes a single config file and loops over all optimizer entries in it. There is no
-way to override individual hyperparams from the CLI — every new sweep needs a new file.
+way to override individual hyperparams from the CLI -- every new sweep needs a new file.
 
-## Existing solution (unused)
+## Resolution
 
-`run_hydra.py` + `hydra_conf/` already exists and supports CLI overrides, e.g.:
+Migrated to `run_hydra.py` + `hydra_conf/` with CLI overrides. Sweep variation now lives in
+`param_configs/` JSON files, not in duplicated train scripts or config yamls.
 
-```bash
-python run_hydra.py optimizer=dap-opnorm optimizer.optimizer_params.damping=0.05 \
-                    optimizer.optimizer_params.lr=0.05
-```
-
-No new config file needed per run. Sweeps can be expressed as Hydra multirun:
-
-```bash
-python run_hydra.py -m optimizer.optimizer_params.damping=0.01,0.05,0.1 \
-                       optimizer.optimizer_params.lr=0.03,0.05,0.07
-```
-
-## What's needed
-
-- Add `hydra_conf/optimizer/dap-opnorm.yaml` mirroring the dap-opnorm entry in `utils.py`
-- Migrate future dap-opnorm sweeps to use `run_hydra.py` instead of `run.py`
-- Update `submit.sh` (or add `submit_hydra.sh`) to wrap Hydra multirun in sbatch
+See `CLAUDE.md` at repo root for current conventions.

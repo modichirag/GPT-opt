@@ -11,3 +11,4 @@ gptopt.egg-info/
 __pycache__/
 gptopt/outputs/
 debug_matrices/
+.pytest_cache/

@@ -123,27 +123,59 @@ The top three configs cluster at $c \approx 0.05$–$0.07$ at end of training.
 This is a strong empirical signal: the optimal operating point corresponds to a specific
 effective step magnitude, not a specific nominal LR or damping individually.
 
-## Open questions and next steps
+## Per-layer adaptive damping (opnorm_target=2.0)
 
-### 1. Adaptive damping via target $c$
+The $c$ analysis above motivates adaptive damping. After iterating through several formulations
+(see `docs/notes/adaptive_damping.md` for the full derivation), the winning approach is
+**per-layer adaptive damping**: compute $\delta_\ell$ per layer from eigenvalues already
+available in the eigendecomposition:
 
-The $c$ analysis motivates a direct adaptive scheme: choose $\delta$ per step to maintain
-$\eta \cdot \|C_{\mathrm{eff}}^{-1/2}\|_{\mathrm{op}} \approx c^*$. Since
-$\|C_{\mathrm{eff}}^{-1/2}\|_{\mathrm{op}} \approx 1/\sqrt{\delta \cdot \lambda_{\max}(C)}$,
-this gives:
+$$\delta_\ell = \max\left(0,\; \frac{1/\mathrm{opnorm\_target}^2 - \lambda_{\min}(C_\ell)}{\lambda_{\max}(C_\ell)}\right)$$
 
-$$\delta = \frac{\eta^2}{(c^*)^2 \cdot \lambda_{\max}(C)}$$
+This gives exact opnorm = opnorm_target for every layer, every step. No averaging bias,
+no extra cost (eigendecomposition is already done per layer).
 
-All quantities ($\eta$, $\lambda_{\max}(C)$) are available at each step. One hyperparameter
-($c^* \approx 0.06$) replaces the current two ($\eta$, $\delta$). This would make the method
-automatically robust to LR choice — a key practical advantage. See
-`docs/notes/dap_opnorm_diagnostics_and_adaptive_damping.md` for details.
+### Results: per-layer adaptive vs best fixed damping
 
-### 2. Scale to larger models
+All runs: opnorm_target=2.0, ema_beta=0.99, full 3814-step fineweb1B training.
 
-All results are at GPT-tiny. The gain over Muon and the optimal $c$ may both change at
-larger scale.
+| lr | Fixed (best δ) | Per-Layer Adaptive | Δ |
+|----|---------------|-------------------|-----|
+| 0.01 | 4.215 (δ=0.003) | **4.205** | -0.010 |
+| 0.02 | 4.205 (δ=0.01) | **4.189** | -0.016 |
+| 0.03 | 4.202 (δ=0.03) | **4.189** | -0.013 |
+| 0.05 | 4.209 (δ=0.05) | **4.198** | -0.011 |
+| 0.07 | 4.232 (δ=0.1) | **4.202** | -0.030 |
 
-### 3. Confirm fillin runs (d=0.003 smaller LRs, d=0.05/0.1 at lr=0.02)
+**Per-layer adaptive beats hand-tuned fixed damping at every LR.** Best: 4.189 vs 4.202.
 
-Pending.
+Key properties:
+- **LR-invariant**: val loss spread is only 0.016 across 7× LR range (vs 0.030 for fixed)
+- **Single hyperparameter**: opnorm_target=2.0 replaces joint (lr, δ) tuning
+- **Zero extra cost**: uses eigenvalues already computed per layer
+- **Beats Muon by 0.050 nats** (4.189 vs 4.239)
+
+A global adaptive variant (Jensen-corrected averaging) was also tested but fails at lr=0.07
+(4.716) due to the 30× spread in per-layer eigmax. See `docs/notes/adaptive_damping.md`.
+
+### Updated comparison
+
+| Method | Best val | Gain over AdamW |
+|--------|---------|----------------|
+| AdamW  | 4.273   | —              |
+| Muon   | 4.239   | 0.034          |
+| DAPOpNorm (fixed δ=0.03) | 4.202 | 0.071 |
+| DAPOpNorm (per-layer adaptive) | **4.189** | **0.084** |
+
+## Next steps
+
+### 1. Scale to GPT-small
+
+GPT-tiny results are promising. Need to validate at GPT-small (768d, 12L, ~124M params)
+on fineweb1B. Existing baselines: Adam best = 4.238 (from `gptopt/outputs/fineweb1B_baseline/`).
+Need fresh AdamW and Muon baselines with warm-up-cosine schedule, plus DAPOpNorm per-layer sweep.
+
+### 2. Sensitivity to opnorm_target
+
+All results use opnorm_target=2.0. Worth a quick sweep of {1.5, 2.0, 2.5, 3.0} at fixed LR
+to confirm 2.0 is near-optimal.
