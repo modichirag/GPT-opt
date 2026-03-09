@@ -18,6 +18,12 @@ OmegaConf.register_new_resolver("div", lambda x, y: x // y)
 
 @hydra.main(version_base=None, config_path="hydra_conf", config_name="config")
 def main(config : DictConfig):
+    git_info = get_git_info()
+    if git_info.startswith("dirty-") and not os.environ.get("ALLOW_DIRTY"):
+        print(f"ERROR: Uncommitted changes detected ({git_info}).")
+        print("Commit your code first for reproducibility, or set ALLOW_DIRTY=1 to override.")
+        raise SystemExit(1)
+
     set_seed(config.get('seed', 42))
 
     # Establish Hydra run directory for saving outputs
