@@ -53,43 +53,46 @@ Per-layer adaptive damping targets opnorm_target=2.0 per layer. See
 
 All methods across learning rates (per-layer adaptive damping, opnorm_target=2.0 for DAPOpNorm variants):
 
-| lr   | AdamW | Muon  | null  | sign_only | shampoo |
-|------|-------|-------|-------|-----------|---------|
-| 0.0003 | 4.235 | --  | --    | --        | --      |
-| 0.001 | 3.842 | --   | --    | --        | --      |
-| 0.003 | **3.707** | -- | 3.775 | --       | --      |
-| 0.005 | --    | 3.691 | 3.691 | --       | --      |
-| 0.01 | 6.479 | 3.600 | 3.610 | 3.550    | 3.552   |
-| 0.02 | --    | **3.597** | **3.562** | 3.504 | **3.518** |
-| 0.03 | --    | 3.629 | 3.579 | --       | --      |
-| 0.04 | --    | --    | --    | 3.497    | 3.543   |
-| 0.05 | --    | 3.713 | 3.613 | --       | --      |
-| 0.06 | --    | --    | --    | 3.500    | 3.581   |
-| 0.07 | --    | --    | 3.645 | --       | --      |
-| 0.08 | --    | --    | --    | 3.498    | 3.646   |
-| 0.12 | --    | --    | --    | **3.495** | 3.646  |
-| 0.16 | --    | --    | --    | 3.684    | 3.771   |
-| 0.20 | --    | --    | --    | 3.690    | 3.713   |
+| lr   | AdamW | Muon  | null  | full  | shampoo_sign |
+|------|-------|-------|-------|-------|---------|
+| 0.0003 | 4.235 | --  | --    | --    | --      |
+| 0.001 | 3.842 | --   | --    | --    | --      |
+| 0.003 | **3.707** | -- | 3.775 | --   | --      |
+| 0.005 | --    | 3.691 | 3.691 | --   | --      |
+| 0.01 | 6.479 | 3.600 | 3.610 | --   | 3.552   |
+| 0.02 | --    | **3.597** | **3.562** | **3.533** | **3.518** |
+| 0.03 | --    | 3.629 | 3.579 | --   | --      |
+| 0.04 | --    | --    | --    | --   | 3.543   |
+| 0.05 | --    | 3.713 | 3.613 | --   | --      |
+| 0.06 | --    | --    | --    | --   | 3.581   |
+| 0.07 | --    | --    | 3.645 | --   | --      |
+| 0.08 | --    | --    | --    | --   | 3.646   |
+| 0.12 | --    | --    | --    | --   | 3.646   |
+| 0.16 | --    | --    | --    | --   | 3.771   |
+| 0.20 | --    | --    | --    | --   | 3.713   |
 
-Output covariance modes: **null** = input covariance only (standard DAPOpNorm);
-**sign_only** = $\text{sign}(C_{out}^{-1/2} \, G \, C_{in}^{-1/2})$; **shampoo** = $\text{sign}(L^{-1/2} \, G \, R^{-1/2})$ using gradient covariances instead of activation covariances.
+Output covariance modes: **null** = input covariance only ($\text{sign}(G \, C_{in}^{-1/2}) \, C_{in}^{-1/2}$);
+**full** = two-sided activation covariances ($C_{out}^{-1/2} \, \text{sign}(C_{out}^{-1/2} \, G \, C_{in}^{-1/2}) \, C_{in}^{-1/2}$);
+**shampoo_sign** = two-sided gradient covariances ($\text{sign}(L^{-1/2} \, G \, R^{-1/2})$).
+
+Full mode tested only at lr=0.02 with opnorm_target $\in \{2, 3, 4, 6\}$; best was opnorm=4.0 (3.533).
+
+> **Note**: sign_only and sign_input results were removed — they were produced by
+> uncommitted code that cannot be recovered. Fresh reruns with current code are in progress.
 
 ### Compute Efficiency
 
 Shorter runs at lr=0.02 with properly scaled cosine schedules (no lr retuning):
 
-| Steps | Fraction | Muon  | null  | sign_only |
-|-------|----------|-------|-------|-----------|
-| 1334  | 70%      | 3.734 | 3.679 | 3.618    |
-| 1620  | 85%      | 3.666 | 3.610 | --       |
-| 1733  | 91%      | --    | 3.589 | --       |
-| 1906  | 100%     | 3.597 | 3.562 | 3.495*   |
-
-*sign_only at 1906 steps uses lr=0.12 (its best full-length lr); shorter runs use lr=0.02.
+| Steps | Fraction | Muon  | null  |
+|-------|----------|-------|-------|
+| 1334  | 70%      | 3.734 | 3.679 |
+| 1620  | 85%      | 3.666 | 3.610 |
+| 1733  | 91%      | --    | 3.589 |
+| 1906  | 100%     | 3.597 | 3.562 |
 
 **Breakeven**: DAPOpNorm (null) at 1334 steps (3.679) beats Muon at 1620 steps (3.666),
-tolerating $\sim 1.2\times$ overhead per step. sign_only at 1334 steps (3.618) beats both Muon and
-null at 1906 steps.
+tolerating $\sim 1.2\times$ overhead per step.
 
 ### opnorm_target Sensitivity (lr=0.03)
 
@@ -104,23 +107,40 @@ $\text{opnorm\_target} \in \{1.5, 2.0\}$ are tied; performance degrades for larg
 
 ### Key Findings
 
-- **sign_only is best overall**: 3.495 at lr=0.12, beating Muon (3.597) by 0.102 nats
-- **sign_only is remarkably lr-invariant**: spread of only 0.009 across lr=0.01–0.12 (vs 0.253 for shampoo)
-- **Activation covariances > gradient covariances**: sign_only beats shampoo at every lr, with the gap widening at higher lr (+0.002 at lr=0.01, +0.151 at lr=0.12)
-- **All output-cov modes beat null baseline** at every lr tested
-- **Shampoo still beats Muon**: best 3.518 vs 3.597 (0.079 nats)
+- **All DAPOpNorm variants beat Muon** at best lr (0.02 for all)
+- **Two-sided whitening helps**: full (3.533) and shampoo_sign (3.518) both beat one-sided null (3.562)
+- **Gradient covariances beat activation covariances**: shampoo_sign (3.518) > full (3.533), despite being simpler (no hooks needed)
+- **sign_only / sign_input**: results pending rerun (old results from lost uncommitted code)
 
 ### Summary
 
-| Method | Best val | Best LR | Gain over AdamW |
-|--------|----------|---------|-----------------|
-| AdamW | 3.707 | 0.003 | -- |
-| Muon | 3.597 | 0.02 | 0.110 |
-| DAPOpNorm (null, per-layer) | 3.562 | 0.02 | 0.145 |
-| DAPOpNorm (shampoo) | 3.518 | 0.02 | 0.189 |
-| DAPOpNorm (sign_only) | **3.495** | 0.04–0.12 | **0.212** |
+| Method | Best val | Best LR | Gain over Muon |
+|--------|----------|---------|----------------|
+| AdamW | 3.707 | 0.003 | -0.110 |
+| Muon | 3.597 | 0.02 | -- |
+| DAPOpNorm (null) | 3.562 | 0.02 | +0.035 |
+| DAPOpNorm (full) | 3.533 | 0.02 | +0.064 |
+| DAPOpNorm (shampoo_sign) | **3.518** | 0.02 | **+0.079** |
+| DAPOpNorm (sign_only) | _rerun pending_ | -- | -- |
+| DAPOpNorm (sign_input) | _rerun pending_ | -- | -- |
+
+## Scaling: fineweb10B (preliminary)
+
+Early results suggest the null-mode advantage over Muon **does not hold at 10B**:
+
+| Method | Best val (10B) | Best LR |
+|--------|----------------|---------|
+| Muon | **3.383** | 0.02 |
+| DAPOpNorm (null) | 3.447 | 0.03 |
+| DAPOpNorm (sign_only) | 3.703* | 0.02 |
+
+*sign_only 10B still running (step 2048/4200).
+
+This raises questions about whether the 1B improvements reflect genuine algorithmic gains
+or just better sample efficiency on limited data.
 
 ## Next Steps
 
-- **Scale further**: validate at larger model/data scales (GPT-medium, fineweb10B)
+- **Complete sign_only / sign_input reruns** on fineweb1B with current code
+- **Investigate scaling gap**: why does the advantage over Muon shrink at 10B?
 - **Ablations**: weight decay sensitivity, EMA beta sensitivity

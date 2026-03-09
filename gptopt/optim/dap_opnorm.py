@@ -94,8 +94,8 @@ class DAPOpNorm(Optimizer):
         self.opnorm_target = float(opnorm_target) if opnorm_target is not None else None
         self.per_layer_damping = per_layer_damping
 
-        if output_cov_mode not in (None, "sign_input", "sign_only", "full", "shampoo", "kfac", "shampoo_nosign"):
-            raise ValueError(f"output_cov_mode must be None, 'sign_input', 'sign_only', 'full', 'shampoo', 'kfac', or 'shampoo_nosign', got {output_cov_mode}")
+        if output_cov_mode not in (None, "sign_input", "sign_only", "full", "shampoo_sign", "kfac", "shampoo"):
+            raise ValueError(f"output_cov_mode must be None, 'sign_input', 'sign_only', 'full', 'shampoo_sign', 'kfac', or 'shampoo', got {output_cov_mode}")
         self.output_cov_mode = output_cov_mode
         self.abs_damping = float(abs_damping) if abs_damping is not None else None
         self.trace_damping = float(trace_damping) if trace_damping is not None else None
@@ -117,7 +117,7 @@ class DAPOpNorm(Optimizer):
                     raise TypeError(
                         "DAPOpNorm requires LinearWithXtX. Call swap_linears_for_xtx(model) first."
                     )
-                mod._dap_accum_enabled = (self.output_cov_mode not in ("shampoo", "shampoo_nosign"))
+                mod._dap_accum_enabled = (self.output_cov_mode not in ("shampoo_sign", "shampoo"))
                 mod._accum_output_cov = (self.output_cov_mode in ("sign_only", "full", "kfac"))
                 self.param_to_module[mod.weight] = mod
                 self.dap_modules.append(mod)
@@ -277,8 +277,8 @@ class DAPOpNorm(Optimizer):
             # Instead: use no damping for whitening (rcond handles stability),
             # then scale the update by opnorm_target.
             # Non-sign modes (None, full) use opnorm_target to control damping directly.
-            is_sign_mode = self.output_cov_mode in ("sign_input", "sign_only", "shampoo"
-                                                       )  # kfac, shampoo_nosign are NOT sign modes
+            is_sign_mode = self.output_cov_mode in ("sign_input", "sign_only", "shampoo_sign"
+                                                       )  # kfac, shampoo are NOT sign modes
 
             # First pass: compute global adaptive damping (only for non-sign modes)
             if self.opnorm_target is not None and not self.per_layer_damping and not is_sign_mode:
@@ -320,8 +320,8 @@ class DAPOpNorm(Optimizer):
                 else:
                     g_mom = buf
 
-                # Shampoo / shampoo_nosign: gradient covariances instead of activation covariances
-                if self.output_cov_mode in ("shampoo", "shampoo_nosign"):
+                # Shampoo_sign / shampoo: gradient covariances instead of activation covariances
+                if self.output_cov_mode in ("shampoo_sign", "shampoo"):
                     R = g.t() @ g          # [d_in, d_in]
                     L = g @ g.t()          # [d_out, d_out]
 
@@ -339,12 +339,12 @@ class DAPOpNorm(Optimizer):
                     else:
                         R_use, L_use = R, L
 
-                    if self.output_cov_mode == "shampoo":
+                    if self.output_cov_mode == "shampoo_sign":
                         # Sign mode: no damping, minimal rcond
                         R_inv_sqrt, opnorm_R, eigmax_R, eigmin_R, _ = self._compute_C_inv_sqrt(R_use, damping=0.0, rcond=1e-12)
                         L_inv_sqrt, opnorm_L, eigmax_L, eigmin_L, _ = self._compute_C_inv_sqrt(L_use, damping=0.0, rcond=1e-12)
                     else:
-                        # shampoo_nosign: needs damping to control update scale.
+                        # shampoo: needs damping to control update scale.
                         # opnorm_target targets ||update||_op = opnorm_target by default,
                         # accounting for ||G||_op. With precond_only_opnorm, it only
                         # targets the preconditioner opnorm (ignoring gradient magnitude).
@@ -380,10 +380,10 @@ class DAPOpNorm(Optimizer):
 
                     # Whitened gradient
                     G_w = L_inv_sqrt.to(g_mom.dtype) @ g_mom @ R_inv_sqrt.to(g_mom.dtype)
-                    if self.output_cov_mode == "shampoo":
+                    if self.output_cov_mode == "shampoo_sign":
                         update = PolarExpress(G_w, steps=self.ns_steps)
                     else:
-                        update = G_w  # shampoo_nosign: raw whitened gradient
+                        update = G_w  # shampoo: raw whitened gradient
 
                     p.data.mul_(1 - lr * wd)
                     p.data.add_(update, alpha=-lr)
@@ -399,7 +399,7 @@ class DAPOpNorm(Optimizer):
 
                 if C is not None:
                     if is_sign_mode:
-                        # Sign modes: no damping, minimal rcond (just prevent numerical zeros)
+                        # Sign modes: no damping, minimal rcond (sign absorbs scale)
                         C_inv_sqrt, opnorm, eigmax_C, eigmin_C, delta_used = self._compute_C_inv_sqrt(C, damping=0.0, rcond=1e-12)
                         self.diagnostics['delta_per_layer'].append(0.0)
                     else:

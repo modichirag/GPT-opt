@@ -101,12 +101,12 @@ DAPOpNorm supports several damping strategies, selected by priority:
 Per layer, computes $\delta_\ell$ via eigendecomposition so that the *update* operator norm
 hits the target. The mechanism depends on whether the mode uses matrix sign:
 
-- **Sign modes** (null, full, sign_only, shampoo, sign_input): The matrix sign absorbs
+- **Sign modes** (null, full, sign_only, shampoo_sign, sign_input): The matrix sign absorbs
   $\|G\|_{\mathrm{op}}$, so $\|\Delta W\|_{\mathrm{op}} = \|C^{-1/2}\|_{\mathrm{op}}$
   (one-sided) or $\|C_{\mathrm{out}}^{-1/2}\|_{\mathrm{op}} \cdot \|C_{\mathrm{in}}^{-1/2}\|_{\mathrm{op}}$
   (two-sided). The target is achieved by damping the covariance eigenvalues directly.
 
-- **No-sign modes** (kfac, shampoo_nosign): $\|\Delta W\|_{\mathrm{op}} \leq
+- **No-sign modes** (kfac, shampoo): $\|\Delta W\|_{\mathrm{op}} \leq
   \|C_{\mathrm{out}}^{-1/2}\|_{\mathrm{op}} \cdot \|G\|_{\mathrm{op}} \cdot
   \|C_{\mathrm{in}}^{-1/2}\|_{\mathrm{op}}$. To hit the target, each side's opnorm target
   is adjusted to $\sqrt{\mathrm{opnorm\_target} / \|G_{\mathrm{mom}}\|_{\mathrm{op}}}$.
@@ -143,7 +143,7 @@ $\delta_{\mathrm{equiv}} = \rho \cdot \frac{\mathrm{tr}(C)/d}{\lambda_{\max}(C)}
 
 ### 5. `precond_only_opnorm`
 
-Only relevant for **kfac** and **shampoo_nosign** (no-sign doubly-whitened modes).
+Only relevant for **kfac** and **shampoo** (no-sign doubly-whitened modes).
 
 When `precond_only_opnorm=True`, `opnorm_target` controls only the preconditioner opnorm
 $\|C^{-1/2}\|_{\mathrm{op}}$, *not* the full update opnorm. The gradient magnitude is
@@ -165,9 +165,9 @@ When multiple damping parameters are set, precedence is:
 | full | $\prod \|C_i^{-1/2}\|_{\mathrm{op}}$ (≈ update opnorm) | No |
 | sign_only | N/A (no damping, sign normalizes) | No |
 | sign_input | N/A (no damping, sign normalizes) | No |
-| shampoo | N/A (no damping, sign normalizes) | No |
+| shampoo_sign | N/A (no damping, sign normalizes) | No |
 | kfac | $\|\Delta W\|_{\mathrm{op}}$ (accounts for $\|G\|_{\mathrm{op}}$) | Yes: ignores $\|G\|_{\mathrm{op}}$ |
-| shampoo_nosign | $\|\Delta W\|_{\mathrm{op}}$ (accounts for $\|G\|_{\mathrm{op}}$) | Yes: ignores $\|G\|_{\mathrm{op}}$ |
+| shampoo | $\|\Delta W\|_{\mathrm{op}}$ (accounts for $\|G\|_{\mathrm{op}}$) | Yes: ignores $\|G\|_{\mathrm{op}}$ |
 
 See [`docs/experiments/dap_opnorm_fineweb1b.md`](../experiments/dap_opnorm_fineweb1b.md) for
 experimental results.

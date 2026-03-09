@@ -1,5 +1,5 @@
 {
     "lr": [0.04, 0.06, 0.08],
     "ema_beta": [0.99],
-    "output_cov_mode": ["shampoo"]
+    "output_cov_mode": ["shampoo_sign"]
 }

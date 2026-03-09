@@ -1,0 +1,5 @@
+{
+    "lr": [0.02],
+    "opnorm_target": [4.0],
+    "output_cov_mode": ["full"]
+}
