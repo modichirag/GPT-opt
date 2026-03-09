@@ -1,6 +1,6 @@
 {
     "lr": [0.005, 0.01, 0.02, 0.04],
-    "trace_damping": [0.03, 0.1, 0.3],
+    "trace_damping": [0.1, 0.3, 1.0],
     "output_cov_mode": ["kfac"],
     "ema_beta": [0.99]
 }

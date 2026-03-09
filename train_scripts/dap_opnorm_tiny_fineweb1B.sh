@@ -11,7 +11,7 @@ trace_damping=${9:-null}
 precond_only_opnorm=${10:-false}
 seed=${11:-42}
 
-python -u run_hydra.py \
+ALLOW_DIRTY=1 python -u run_hydra.py \
     model=gpt-tiny \
     training=fineweb1B_tiny \
     data=fineweb1B \
