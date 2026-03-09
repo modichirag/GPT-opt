@@ -39,7 +39,7 @@ def eval_validation_loss(model, val_dataloader, val_accum_steps, autocast_ctxt):
     return val_loss
 
 
-def train(train_dataloader, val_dataloader, model, optimizer, training_params, logging_params, scheduler=None, ckpt_dir="", wandb_run=None):
+def train(train_dataloader, val_dataloader, model, optimizer, training_params, logging_params, scheduler=None, ckpt_dir="", wandb_run=None, output_path=None):
     
     world_size, rank, local_rank, device  = get_worker_info()
     master_process = (rank == 0)
@@ -132,9 +132,10 @@ def train(train_dataloader, val_dataloader, model, optimizer, training_params, l
                 step_time = time.time() - start_time
                 # Count an optimizer step
                 opt_step += 1
-                if master_process and wandb_run is not None:
+                wandb_log_step = logging_params.get('wandb_log_step', 1)
+                if master_process and wandb_run is not None and (opt_step % wandb_log_step == 0):
                     wandb_log_dict = {
-                        "train/loss": loss_accum.item(), 
+                        "train/loss": loss_accum.item(),
                         "train/grad_norm": norm.item(),
                         "train/step_time": step_time,
                         "train/step": opt_step,
@@ -157,7 +158,10 @@ def train(train_dataloader, val_dataloader, model, optimizer, training_params, l
                     tps = training_params["tokens_processed"] / step_time
                     print(f"Step {opt_step} of {total_iterations} (optimizer steps).")
                     print(f"Time taken : {step_time*1000:0.1f}ms | Tokens/s : {tps/1000:0.1f}k | Loss : {loss_accum.item():0.3f} | Accum: {grad_accum_steps} micro-steps/opt-step", flush=True)
-                    
+                    if output_path is not None:
+                        with open(output_path, 'w') as file:
+                            json.dump(logger.__dict__, file)
+
                 if (opt_step % logging_params['val_step'] == 0):
                     val_loss = eval_validation_loss(model, val_dataloader, val_accum_steps, autocast_ctxt)
                     if master_process and wandb_run is not None:

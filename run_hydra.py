@@ -159,7 +159,8 @@ def main(config : DictConfig):
     try:
         logger = train(train_dataloader, val_dataloader, model_copy, optimizer, training_params,
                     scheduler=scheduler, ckpt_dir=ckpt_dir,
-                    logging_params=logging_config, wandb_run=wandb_run)
+                    logging_params=logging_config, wandb_run=wandb_run,
+                    output_path=output_path if master_process else None)
     finally:
         if master_process and wandb_run is not None:
             wandb_run.finish()

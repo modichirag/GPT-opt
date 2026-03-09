@@ -1,6 +1,7 @@
 logging_params:
   val_tokens_processed: ${training.training_params.val_tokens_processed} #2^23
-  log_step: 256
+  log_step: 8
+  wandb_log_step: 1
   val_step: 256
   save_ckpt_step: 500
   load_ckpt_step: 0
