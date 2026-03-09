@@ -1,5 +1,5 @@
 {
-    "lr": [0.02, 0.03],
+    "lr": [0.02, 0.03, 0.05],
     "ema_beta": [0.99],
     "output_cov_mode": ["null"],
     "max_steps": [4200]
