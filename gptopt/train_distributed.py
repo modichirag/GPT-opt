@@ -34,7 +34,7 @@ def eval_validation_loss(model, val_dataloader, val_accum_steps, autocast_ctxt):
     val_loss = (val_loss.detach() / counter).to(device)
     if world_size > 1: dist.all_reduce(val_loss, op=dist.ReduceOp.AVG)
     if rank == 0:
-        print(f"Validation Loss: {val_loss.item()}")
+        print(f"Validation Loss: {val_loss.item()}", flush=True)
     model.train()
     return val_loss
 
@@ -156,7 +156,7 @@ def train(train_dataloader, val_dataloader, model, optimizer, training_params, l
                 if (opt_step % logging_params['log_step'] == 0) & master_process:
                     tps = training_params["tokens_processed"] / step_time
                     print(f"Step {opt_step} of {total_iterations} (optimizer steps).")
-                    print(f"Time taken : {step_time*1000:0.1f}ms | Tokens/s : {tps/1000:0.1f}k | Loss : {loss_accum.item():0.3f} | Accum: {grad_accum_steps} micro-steps/opt-step")
+                    print(f"Time taken : {step_time*1000:0.1f}ms | Tokens/s : {tps/1000:0.1f}k | Loss : {loss_accum.item():0.3f} | Accum: {grad_accum_steps} micro-steps/opt-step", flush=True)
                     
                 if (opt_step % logging_params['val_step'] == 0):
                     val_loss = eval_validation_loss(model, val_dataloader, val_accum_steps, autocast_ctxt)
@@ -185,7 +185,7 @@ def train(train_dataloader, val_dataloader, model, optimizer, training_params, l
         val_dataloader.reset()
         val_loss = eval_validation_loss(model, val_dataloader, val_accum_steps, autocast_ctxt)
         logger.val_losses.append(val_loss.item())
-        print(f"In rank: {rank}, epoch {epoch+1}, Validation Loss: {val_loss.item()}")        
+        print(f"In rank: {rank}, epoch {epoch+1}, Validation Loss: {val_loss.item()}", flush=True)        
         if (ckpt_dir != ""):
             save_checkpoint(ckpt_dir, step, model, optimizer, logger.losses[-1],
                         train_dataloader, scheduler, logging_params['keep_last'])        
