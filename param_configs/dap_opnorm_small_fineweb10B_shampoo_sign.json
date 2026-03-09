@@ -1,5 +1,6 @@
 {
     "lr": [0.02, 0.04, 0.08],
     "ema_beta": [0.99],
-    "output_cov_mode": ["shampoo_sign"]
+    "output_cov_mode": ["shampoo_sign"],
+    "max_steps": [4200]
 }
