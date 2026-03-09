@@ -94,8 +94,8 @@ class DAPOpNorm(Optimizer):
         self.opnorm_target = float(opnorm_target) if opnorm_target is not None else None
         self.per_layer_damping = per_layer_damping
 
-        if output_cov_mode not in (None, "sign_input", "sign_only", "full", "shampoo_sign", "kfac", "shampoo"):
-            raise ValueError(f"output_cov_mode must be None, 'sign_input', 'sign_only', 'full', 'shampoo_sign', 'kfac', or 'shampoo', got {output_cov_mode}")
+        if output_cov_mode not in (None, "sign_input", "kfac_sign", "full", "shampoo_sign", "kfac", "shampoo"):
+            raise ValueError(f"output_cov_mode must be None, 'sign_input', 'kfac_sign', 'full', 'shampoo_sign', 'kfac', or 'shampoo', got {output_cov_mode}")
         self.output_cov_mode = output_cov_mode
         self.abs_damping = float(abs_damping) if abs_damping is not None else None
         self.trace_damping = float(trace_damping) if trace_damping is not None else None
@@ -118,7 +118,7 @@ class DAPOpNorm(Optimizer):
                         "DAPOpNorm requires LinearWithXtX. Call swap_linears_for_xtx(model) first."
                     )
                 mod._dap_accum_enabled = (self.output_cov_mode not in ("shampoo_sign", "shampoo"))
-                mod._accum_output_cov = (self.output_cov_mode in ("sign_only", "full", "kfac"))
+                mod._accum_output_cov = (self.output_cov_mode in ("kfac_sign", "full", "kfac"))
                 self.param_to_module[mod.weight] = mod
                 self.dap_modules.append(mod)
 
@@ -153,8 +153,17 @@ class DAPOpNorm(Optimizer):
             damping (among active directions); delta_used is the relative damping
             coefficient actually applied (useful when opnorm_target computes it).
         """
-        # Single eigendecomposition of C (before damping)
-        eigvals_C, eigvecs = torch.linalg.eigh(C.to(torch.float32))
+        C_f32 = C.to(torch.float32)
+
+        # For trace_damping, pre-damp C before eigendecomposition to stabilize eigh
+        if trace_damping is not None and opnorm_target is None and abs_damping is None:
+            d = C_f32.shape[0]
+            trace_val = C_f32.trace().item()
+            eps = trace_damping * trace_val / d
+            C_f32 = C_f32 + eps * torch.eye(d, device=C_f32.device, dtype=C_f32.dtype)
+
+        # Single eigendecomposition of C (after pre-damping for trace, before damping otherwise)
+        eigvals_C, eigvecs = torch.linalg.eigh(C_f32)
         eigmax_C = eigvals_C[-1].item()
 
         if opnorm_target is not None:
@@ -172,11 +181,8 @@ class DAPOpNorm(Optimizer):
             # Convert to "relative" form for the eigenvalue addition below
             damping = abs_damping / eigmax_C if eigmax_C > 0 else 0.0
         elif trace_damping is not None:
-            # Trace-scaled damping: C_eff = C + trace_damping * (tr(C)/d) * I
-            # Convert to relative form: delta = trace_damping * mean_eigval / lambda_max
-            d = eigvals_C.shape[0]
-            mean_eigval = eigvals_C.sum().item() / d
-            damping = trace_damping * mean_eigval / eigmax_C if eigmax_C > 0 else 0.0
+            # Already pre-damped above; no additional damping needed
+            damping = 0.0
         elif damping is None:
             damping = self.damping
 
@@ -272,12 +278,12 @@ class DAPOpNorm(Optimizer):
                     mod.S_accum_sum.zero_()
                     mod.S_accum_count.zero_()
 
-            # Sign-only modes (sign_input, sign_only) produce ~orthogonal updates
+            # Sign-only modes (sign_input, kfac_sign) produce ~orthogonal updates
             # (opnorm ≈ 1), so opnorm_target doesn't control update scale via damping.
             # Instead: use no damping for whitening (rcond handles stability),
             # then scale the update by opnorm_target.
             # Non-sign modes (None, full) use opnorm_target to control damping directly.
-            is_sign_mode = self.output_cov_mode in ("sign_input", "sign_only", "shampoo_sign"
+            is_sign_mode = self.output_cov_mode in ("sign_input", "kfac_sign", "shampoo_sign"
                                                        )  # kfac, shampoo are NOT sign modes
 
             # First pass: compute global adaptive damping (only for non-sign modes)
@@ -392,9 +398,9 @@ class DAPOpNorm(Optimizer):
                 # Get input covariance
                 C = self._step_cov.get(p, state.get("C_ema", None))
 
-                # Get output covariance (only for sign_only and full)
+                # Get output covariance (only for kfac_sign and full)
                 C_out = None
-                if self.output_cov_mode in ("sign_only", "full", "kfac"):
+                if self.output_cov_mode in ("kfac_sign", "full", "kfac"):
                     C_out = self._step_cov_out.get(p, state.get("C_out_ema", None))
 
                 if C is not None:
@@ -437,7 +443,7 @@ class DAPOpNorm(Optimizer):
                         G_w = g_mom @ C_inv_sqrt.to(g_mom.dtype)
                         update = PolarExpress(G_w, steps=self.ns_steps)
 
-                    elif self.output_cov_mode in ("sign_only", "full", "kfac") and C_out is not None:
+                    elif self.output_cov_mode in ("kfac_sign", "full", "kfac") and C_out is not None:
                         # Output-side C_out^{-1/2}
                         if is_sign_mode:
                             C_out_inv_sqrt, _, eigmax_out, eigmin_out, delta_out = self._compute_C_inv_sqrt(C_out, damping=0.0, rcond=1e-12)
@@ -468,7 +474,7 @@ class DAPOpNorm(Optimizer):
                             if self.output_cov_mode == "full":
                                 update = C_out_inv_sqrt.to(sign_Gw.dtype) @ sign_Gw @ C_inv_sqrt.to(sign_Gw.dtype)
                             else:
-                                # sign_only — unit opnorm, lr controls scale
+                                # kfac_sign — unit opnorm, lr controls scale
                                 update = sign_Gw
 
                     else:

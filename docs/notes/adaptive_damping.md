@@ -101,7 +101,7 @@ DAPOpNorm supports several damping strategies, selected by priority:
 Per layer, computes $\delta_\ell$ via eigendecomposition so that the *update* operator norm
 hits the target. The mechanism depends on whether the mode uses matrix sign:
 
-- **Sign modes** (null, full, sign_only, shampoo_sign, sign_input): The matrix sign absorbs
+- **Sign modes** (null, full, kfac_sign, shampoo_sign, sign_input): The matrix sign absorbs
   $\|G\|_{\mathrm{op}}$, so $\|\Delta W\|_{\mathrm{op}} = \|C^{-1/2}\|_{\mathrm{op}}$
   (one-sided) or $\|C_{\mathrm{out}}^{-1/2}\|_{\mathrm{op}} \cdot \|C_{\mathrm{in}}^{-1/2}\|_{\mathrm{op}}$
   (two-sided). The target is achieved by damping the covariance eigenvalues directly.
@@ -163,7 +163,7 @@ When multiple damping parameters are set, precedence is:
 |------|---------------------------|----------------------------------------|
 | null | $\|C^{-1/2}\|_{\mathrm{op}}$ (= update opnorm) | No |
 | full | $\prod \|C_i^{-1/2}\|_{\mathrm{op}}$ (≈ update opnorm) | No |
-| sign_only | N/A (no damping, sign normalizes) | No |
+| kfac_sign | N/A (no damping, sign normalizes) | No |
 | sign_input | N/A (no damping, sign normalizes) | No |
 | shampoo_sign | N/A (no damping, sign normalizes) | No |
 | kfac | $\|\Delta W\|_{\mathrm{op}}$ (accounts for $\|G\|_{\mathrm{op}}$) | Yes: ignores $\|G\|_{\mathrm{op}}$ |

@@ -1,6 +1,6 @@
 {
     "lr": [0.02, 0.04, 0.06],
     "ema_beta": [0.99],
-    "output_cov_mode": ["sign_only"],
+    "output_cov_mode": ["kfac_sign"],
     "max_steps": [1334]
 }

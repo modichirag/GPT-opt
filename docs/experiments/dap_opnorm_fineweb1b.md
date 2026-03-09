@@ -53,32 +53,31 @@ Per-layer adaptive damping targets opnorm_target=2.0 per layer. See
 
 All methods across learning rates (per-layer adaptive damping, opnorm_target=2.0 for DAPOpNorm variants):
 
-| lr   | AdamW | Muon  | null  | full  | shampoo_sign |
-|------|-------|-------|-------|-------|---------|
-| 0.0003 | 4.235 | --  | --    | --    | --      |
-| 0.001 | 3.842 | --   | --    | --    | --      |
-| 0.003 | **3.707** | -- | 3.775 | --   | --      |
-| 0.005 | --    | 3.691 | 3.691 | --   | --      |
-| 0.01 | 6.479 | 3.600 | 3.610 | --   | 3.552   |
-| 0.02 | --    | **3.597** | **3.562** | **3.533** | **3.518** |
-| 0.03 | --    | 3.629 | 3.579 | --   | --      |
-| 0.04 | --    | --    | --    | --   | 3.543   |
-| 0.05 | --    | 3.713 | 3.613 | --   | --      |
-| 0.06 | --    | --    | --    | --   | 3.581   |
-| 0.07 | --    | --    | 3.645 | --   | --      |
-| 0.08 | --    | --    | --    | --   | 3.646   |
-| 0.12 | --    | --    | --    | --   | 3.646   |
-| 0.16 | --    | --    | --    | --   | 3.771   |
-| 0.20 | --    | --    | --    | --   | 3.713   |
+| lr   | AdamW | Muon  | null  | sign_input | kfac_sign | full  | shampoo_sign |
+|------|-------|-------|-------|------------|-----------|-------|---------|
+| 0.0003 | 4.235 | --  | --    | --         | --        | --    | --      |
+| 0.001 | 3.842 | --   | --    | --         | --        | --    | --      |
+| 0.003 | **3.707** | -- | 3.775 | --        | --        | --    | --      |
+| 0.005 | --    | 3.691 | 3.691 | --        | --        | --    | --      |
+| 0.01 | 6.479 | 3.600 | 3.610 | 3.565     | 3.553     | 3.567 | 3.552   |
+| 0.02 | --    | **3.597** | 3.562 | 3.530  | **3.506** | **3.533** | 3.518 |
+| 0.03 | --    | 3.629 | 3.579 | --        | --        | --    | --      |
+| 0.04 | --    | --    | --    | 3.557     | 3.531     | 3.578 | 3.543   |
+| 0.05 | --    | 3.713 | 3.613 | --        | --        | --    | --      |
+| 0.06 | --    | --    | --    | --        | --        | --    | 3.581   |
+| 0.07 | --    | --    | 3.645 | --        | --        | --    | --      |
+| 0.08 | --    | --    | --    | 3.611     | 3.581     | --    | 3.646   |
+| 0.12 | --    | --    | --    | --        | --        | --    | 3.646   |
+| 0.16 | --    | --    | --    | --        | --        | --    | 3.771   |
+| 0.20 | --    | --    | --    | --        | --        | --    | 3.713   |
 
 Output covariance modes: **null** = input covariance only ($\text{sign}(G \, C_{in}^{-1/2}) \, C_{in}^{-1/2}$);
+**sign_input** = $\text{sign}(G \, C_{in}^{-1/2})$ (unit opnorm, lr controls scale);
+**kfac_sign** = $\text{sign}(C_{out}^{-1/2} \, G \, C_{in}^{-1/2})$ (two-sided activation cov, sign only);
 **full** = two-sided activation covariances ($C_{out}^{-1/2} \, \text{sign}(C_{out}^{-1/2} \, G \, C_{in}^{-1/2}) \, C_{in}^{-1/2}$);
 **shampoo_sign** = two-sided gradient covariances ($\text{sign}(L^{-1/2} \, G \, R^{-1/2})$).
 
-Full mode tested only at lr=0.02 with opnorm_target $\in \{2, 3, 4, 6\}$; best was opnorm=4.0 (3.533).
-
-> **Note**: sign_only and sign_input results were removed — they were produced by
-> uncommitted code that cannot be recovered. Fresh reruns with current code are in progress.
+Full mode uses opnorm_target=4.0 (best of $\{2, 3, 4, 6\}$ at lr=0.02); all other modes use opnorm_target=2.0.
 
 ### Compute Efficiency
 
@@ -107,10 +106,11 @@ $\text{opnorm\_target} \in \{1.5, 2.0\}$ are tied; performance degrades for larg
 
 ### Key Findings
 
+- **kfac_sign is best overall**: 3.506 at lr=0.02, beating Muon by 0.091 nats
 - **All DAPOpNorm variants beat Muon** at best lr (0.02 for all)
-- **Two-sided whitening helps**: full (3.533) and shampoo_sign (3.518) both beat one-sided null (3.562)
-- **Gradient covariances beat activation covariances**: shampoo_sign (3.518) > full (3.533), despite being simpler (no hooks needed)
-- **sign_only / sign_input**: results pending rerun (old results from lost uncommitted code)
+- **Two-sided whitening helps**: all two-sided modes beat one-sided null (3.562)
+- **Activation covariances beat gradient covariances**: kfac_sign (3.506) > shampoo_sign (3.518), with the gap widening at higher lr
+- **kfac_sign is more lr-robust than shampoo_sign**: spread of 0.075 across lr=0.01–0.08 (vs 0.094 for shampoo_sign)
 
 ### Summary
 
@@ -120,9 +120,9 @@ $\text{opnorm\_target} \in \{1.5, 2.0\}$ are tied; performance degrades for larg
 | Muon | 3.597 | 0.02 | -- |
 | DAPOpNorm (null) | 3.562 | 0.02 | +0.035 |
 | DAPOpNorm (full) | 3.533 | 0.02 | +0.064 |
-| DAPOpNorm (shampoo_sign) | **3.518** | 0.02 | **+0.079** |
-| DAPOpNorm (sign_only) | _rerun pending_ | -- | -- |
-| DAPOpNorm (sign_input) | _rerun pending_ | -- | -- |
+| DAPOpNorm (sign_input) | 3.530 | 0.02 | +0.067 |
+| DAPOpNorm (shampoo_sign) | 3.518 | 0.02 | +0.079 |
+| DAPOpNorm (kfac_sign) | **3.506** | 0.02 | **+0.091** |
 
 ## Scaling: fineweb10B (preliminary)
 
@@ -132,15 +132,15 @@ Early results suggest the null-mode advantage over Muon **does not hold at 10B**
 |--------|----------------|---------|
 | Muon | **3.383** | 0.02 |
 | DAPOpNorm (null) | 3.447 | 0.03 |
-| DAPOpNorm (sign_only) | 3.703* | 0.02 |
+| DAPOpNorm (kfac_sign) | 3.703* | 0.02 |
 
-*sign_only 10B still running (step 2048/4200).
+*kfac_sign 10B still running (step 2048/4200).
 
 This raises questions about whether the 1B improvements reflect genuine algorithmic gains
 or just better sample efficiency on limited data.
 
 ## Next Steps
 
-- **Complete sign_only / sign_input reruns** on fineweb1B with current code
 - **Investigate scaling gap**: why does the advantage over Muon shrink at 10B?
+- **No-sign modes** (kfac, shampoo): see [`docs/plans/nosign_damping.md`](../plans/nosign_damping.md)
 - **Ablations**: weight decay sensitivity, EMA beta sensitivity
