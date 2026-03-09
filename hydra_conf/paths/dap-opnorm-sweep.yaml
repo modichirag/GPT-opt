@@ -1,0 +1,1 @@
+run_name: bs-${training.training_params.global_batch_size}-lr-${optimizer.optimizer_params.lr}-wd-${optimizer.optimizer_params.weight_decay}-opnorm-${optimizer.optimizer_params.opnorm_target}-cov-${optimizer.optimizer_params.output_cov_mode}

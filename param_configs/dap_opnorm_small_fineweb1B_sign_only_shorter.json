@@ -1,0 +1,6 @@
+{
+    "lr": [0.12],
+    "ema_beta": [0.99],
+    "output_cov_mode": ["sign_only"],
+    "max_steps": [1334, 1620]
+}

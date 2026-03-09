@@ -1,0 +1,6 @@
+{
+    "lr": [0.02],
+    "opnorm_target": [2.0],
+    "ema_beta": [0.99],
+    "max_steps": [1733]
+}

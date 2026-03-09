@@ -1,0 +1,5 @@
+{
+    "lr": [0.04],
+    "ema_beta": [0.99],
+    "output_cov_mode": ["sign_only"]
+}

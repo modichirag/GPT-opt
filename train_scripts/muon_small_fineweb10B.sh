@@ -6,10 +6,10 @@ seed=${4:-42}
 
 python -u run_hydra.py \
     model=gpt-small \
-    training=fineweb1B \
-    data=fineweb1B \
+    training=fineweb10B \
+    data=fineweb10B \
     optimizer=muon \
-    logging=default \
+    logging=wandb \
     "optimizer.optimizer_params.lr=${lr}" \
     "optimizer.optimizer_params.weight_decay=${wd}" \
     "+training.training_params.max_steps=${max_steps}" \

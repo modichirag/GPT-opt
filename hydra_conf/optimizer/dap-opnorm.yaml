@@ -10,5 +10,9 @@ optimizer_params:
   damping: 0.0
   opnorm_target: null
   per_layer_damping: false
+  output_cov_mode: null
+  abs_damping: null
+  trace_damping: null
+  precond_only_opnorm: false
   ema_beta: 0.0
   rcond: 1.0e-3

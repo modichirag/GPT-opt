@@ -18,11 +18,16 @@ class LinearWithXtX(nn.Linear):
         # We default to track_xtx=False; the optimizer will enable it only for DAP layers.
         self.track_xtx = bool(track_xtx)
 
-        # fp32 accumulators (same device as module)
+        # fp32 accumulators for input covariance (same device as module)
         self.register_buffer(
             "C_accum_sum", torch.zeros(in_features, in_features, dtype=torch.float32), persistent=True
         )
         self.register_buffer("C_accum_count", torch.zeros((), dtype=torch.int64), persistent=True)
+
+        # fp32 accumulators for output gradient covariance (lazy — allocated on first use)
+        self._out_features = out_features
+        self.register_buffer("S_accum_sum", None, persistent=False)
+        self.register_buffer("S_accum_count", None, persistent=False)
 
         self.register_buffer(
             "_xtx_mults_this_step", torch.tensor(0, dtype=torch.int64), persistent=False
@@ -31,14 +36,31 @@ class LinearWithXtX(nn.Linear):
         # wired by the optimizer
         self._dap_timing_enabled: bool = False
         self._dap_timing_sink: Optional[list] = None
-        self._dap_accum_enabled: bool = False  
+        self._dap_accum_enabled: bool = False
+        self._accum_output_cov: bool = False
         self.xtx_subsample: Optional[float] = None
 
         self.xtx_mode: bool = True
 
+        # No module-level backward hook — we use tensor hooks in forward() instead
+        # to avoid keeping all output gradients alive simultaneously during backward.
+
+    @torch.no_grad()
+    def _accum_sts(self, grad_out: torch.Tensor) -> None:
+        S = grad_out.detach().reshape(-1, grad_out.shape[-1])  # [N, d_out]
+        if self.xtx_subsample is not None:
+            k = int(self.xtx_subsample * S.shape[0])
+            S = S[:k]
+        StS = S.transpose(0, 1) @ S  # [d_out, d_out]
+        # Lazy allocation of output covariance buffers
+        if self.S_accum_sum is None:
+            self.S_accum_sum = torch.zeros(self._out_features, self._out_features, dtype=torch.float32, device=S.device)
+            self.S_accum_count = torch.zeros((), dtype=torch.int64, device=S.device)
+        self.S_accum_sum.add_(StS.to(self.S_accum_sum.dtype))
+        self.S_accum_count.add_(S.shape[0])
+
     @torch.no_grad()
     def _accum_xtx(self, x: torch.Tensor) -> None:
-        # Completely detach from autograd; don’t let this be traced/compiled.
         X = x.detach().reshape(-1, x.shape[-1])  # [N, d]
         if self.xtx_subsample is not None:
             k = int(self.xtx_subsample * X.shape[0])
@@ -50,8 +72,10 @@ class LinearWithXtX(nn.Linear):
 
     def forward(self, x):
         y = F.linear(x, self.weight, self.bias)
-        if self.training and self._dap_accum_enabled and self.xtx_mode:  # only for DAP layers
+        if self.training and self._dap_accum_enabled and self.xtx_mode:
             self._accum_xtx(x)
+        if self.training and self._accum_output_cov and y.requires_grad:
+            y.register_hook(lambda grad, mod=self: mod._accum_sts(grad))
         return y
 
 class DAP(Optimizer):

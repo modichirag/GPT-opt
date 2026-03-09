@@ -34,6 +34,10 @@ class DAPOpNorm(Optimizer):
         damping=0.0,
         opnorm_target=None,
         per_layer_damping=False,
+        output_cov_mode=None,
+        abs_damping=None,
+        trace_damping=None,
+        precond_only_opnorm=False,
         adamw_betas=(0.95, 0.95),
         adamw_eps=1e-8,
         num_microbatches: Optional[int] = None,
@@ -90,9 +94,17 @@ class DAPOpNorm(Optimizer):
         self.opnorm_target = float(opnorm_target) if opnorm_target is not None else None
         self.per_layer_damping = per_layer_damping
 
+        if output_cov_mode not in (None, "sign_input", "sign_only", "full", "shampoo", "kfac", "shampoo_nosign"):
+            raise ValueError(f"output_cov_mode must be None, 'sign_input', 'sign_only', 'full', 'shampoo', 'kfac', or 'shampoo_nosign', got {output_cov_mode}")
+        self.output_cov_mode = output_cov_mode
+        self.abs_damping = float(abs_damping) if abs_damping is not None else None
+        self.trace_damping = float(trace_damping) if trace_damping is not None else None
+        self.precond_only_opnorm = precond_only_opnorm
+
         self.dap_modules = []
         self.param_to_module: Dict[nn.Parameter, LinearWithXtX] = {}
         self._step_cov: Dict[nn.Parameter, torch.Tensor] = {}
+        self._step_cov_out: Dict[nn.Parameter, torch.Tensor] = {}
 
         self._wire_up_xtx_sources(model, dap_params)
 
@@ -105,7 +117,8 @@ class DAPOpNorm(Optimizer):
                     raise TypeError(
                         "DAPOpNorm requires LinearWithXtX. Call swap_linears_for_xtx(model) first."
                     )
-                mod._dap_accum_enabled = True
+                mod._dap_accum_enabled = (self.output_cov_mode not in ("shampoo", "shampoo_nosign"))
+                mod._accum_output_cov = (self.output_cov_mode in ("sign_only", "full", "kfac"))
                 self.param_to_module[mod.weight] = mod
                 self.dap_modules.append(mod)
 
@@ -115,16 +128,23 @@ class DAPOpNorm(Optimizer):
                 f"Some DAPOpNorm params not owned by any LinearWithXtX: {missing}"
             )
 
-    def _compute_C_inv_sqrt(self, C: torch.Tensor, damping=None, opnorm_target=None):
+    def _compute_C_inv_sqrt(self, C: torch.Tensor, damping=None, opnorm_target=None, rcond=None, abs_damping=None, trace_damping=None):
         """Compute C^{-1/2} via eigendecomposition with optional damping.
 
         Args:
             C: the covariance matrix
             damping: relative damping coefficient; if None, uses self.damping.
-                Ignored when opnorm_target is set.
+                Ignored when opnorm_target, abs_damping, or trace_damping is set.
+                Relative: C_eff = C + damping * lambda_max(C) * I
             opnorm_target: if set, compute per-layer relative damping to achieve
                 this target opnorm exactly: delta = (1/opnorm_target^2 - lambda_min) / lambda_max,
                 clamped >= 0.
+            abs_damping: absolute damping (standard KFAC/Shampoo style).
+                C_eff = C + abs_damping * I.  Takes precedence over damping but
+                not over opnorm_target.
+            trace_damping: trace-scaled damping (Ishikawa & Karakida 2023).
+                C_eff = C + trace_damping * (tr(C)/d) * I.  Takes precedence
+                over damping but not over opnorm_target or abs_damping.
 
         Returns:
             (C_inv_sqrt, opnorm, C_eigmax, C_eigmin, delta_used): C_inv_sqrt is the matrix
@@ -147,14 +167,28 @@ class DAPOpNorm(Optimizer):
                 damping = max(0.0, (target_min_eigval - eigmin_C_raw) / eigmax_C)
             else:
                 damping = self.damping
+        elif abs_damping is not None:
+            # Standard KFAC/Shampoo damping: C_eff = C + epsilon * I
+            # Convert to "relative" form for the eigenvalue addition below
+            damping = abs_damping / eigmax_C if eigmax_C > 0 else 0.0
+        elif trace_damping is not None:
+            # Trace-scaled damping: C_eff = C + trace_damping * (tr(C)/d) * I
+            # Convert to relative form: delta = trace_damping * mean_eigval / lambda_max
+            d = eigvals_C.shape[0]
+            mean_eigval = eigvals_C.sum().item() / d
+            damping = trace_damping * mean_eigval / eigmax_C if eigmax_C > 0 else 0.0
         elif damping is None:
             damping = self.damping
 
         # Apply relative damping to eigenvalues directly (avoids second decomp)
         eigvals_eff = eigvals_C + damping * eigmax_C if damping > 0 else eigvals_C
 
-        threshold = self.rcond * eigvals_eff.max()
-        mask = eigvals_eff > threshold
+        # rcond truncation: skip when opnorm_target is set (damping handles regularization)
+        if opnorm_target is not None:
+            mask = eigvals_eff > 0
+        else:
+            threshold = (rcond if rcond is not None else self.rcond) * eigvals_eff.max()
+            mask = eigvals_eff > threshold
 
         inv_sqrt_vals = torch.zeros_like(eigvals_eff)
         inv_sqrt_vals[mask] = 1.0 / eigvals_eff[mask].sqrt()
@@ -177,7 +211,8 @@ class DAPOpNorm(Optimizer):
             with torch.enable_grad():
                 loss = closure()
 
-        self.diagnostics = {'C_inv_sqrt_opnorm': [], 'C_eigmax': [], 'C_eigmin': [], 'delta_adaptive': None, 'delta_per_layer': []}
+        self.diagnostics = {'C_inv_sqrt_opnorm': [], 'C_eigmax': [], 'C_eigmin': [], 'delta_adaptive': None, 'delta_per_layer': [],
+                             'C_out_eigmax': [], 'C_out_eigmin': [], 'delta_out_per_layer': []}
 
         for group in self.param_groups:
             lr = group["lr"]
@@ -190,7 +225,7 @@ class DAPOpNorm(Optimizer):
 
             params = [p for p in group["params"] if self.state[p]["use_dap_opnorm"]]
 
-            # Finalize accumulated covariance
+            # Finalize accumulated input covariance
             self._step_cov.clear()
             for p, mod in self.param_to_module.items():
                 count = mod.C_accum_count.item()
@@ -212,8 +247,41 @@ class DAPOpNorm(Optimizer):
                 mod.C_accum_sum.zero_()
                 mod.C_accum_count.zero_()
 
-            # First pass: compute global adaptive damping (skipped for per-layer mode)
-            if self.opnorm_target is not None and not self.per_layer_damping:
+            # Finalize accumulated output gradient covariance
+            self._step_cov_out: Dict[torch.nn.Parameter, torch.Tensor] = {}
+            if self.output_cov_mode is not None:
+                for p, mod in self.param_to_module.items():
+                    if mod.S_accum_count is None:
+                        continue
+                    count = mod.S_accum_count.item()
+                    if not count:
+                        continue
+
+                    S_mean = mod.S_accum_sum / count
+                    state = self.state[p]
+
+                    if self.ema_beta == 0.0:
+                        self._step_cov_out[p] = S_mean
+                    else:
+                        C_out_prev = state.get("C_out_ema", None)
+                        if C_out_prev is None:
+                            state["C_out_ema"] = S_mean.detach().clone()
+                        else:
+                            C_out_prev.mul_(self.ema_beta).add_(S_mean, alpha=(1.0 - self.ema_beta))
+
+                    mod.S_accum_sum.zero_()
+                    mod.S_accum_count.zero_()
+
+            # Sign-only modes (sign_input, sign_only) produce ~orthogonal updates
+            # (opnorm ≈ 1), so opnorm_target doesn't control update scale via damping.
+            # Instead: use no damping for whitening (rcond handles stability),
+            # then scale the update by opnorm_target.
+            # Non-sign modes (None, full) use opnorm_target to control damping directly.
+            is_sign_mode = self.output_cov_mode in ("sign_input", "sign_only", "shampoo"
+                                                       )  # kfac, shampoo_nosign are NOT sign modes
+
+            # First pass: compute global adaptive damping (only for non-sign modes)
+            if self.opnorm_target is not None and not self.per_layer_damping and not is_sign_mode:
                 eigmax_vals = []
                 for p in params:
                     state_p = self.state[p]
@@ -252,24 +320,162 @@ class DAPOpNorm(Optimizer):
                 else:
                     g_mom = buf
 
-                # Get covariance
+                # Shampoo / shampoo_nosign: gradient covariances instead of activation covariances
+                if self.output_cov_mode in ("shampoo", "shampoo_nosign"):
+                    R = g.t() @ g          # [d_in, d_in]
+                    L = g @ g.t()          # [d_out, d_out]
+
+                    # EMA (same pattern as hook-based cov)
+                    if self.ema_beta > 0.0:
+                        if "R_ema" not in state:
+                            state["R_ema"] = R.detach().clone()
+                        else:
+                            state["R_ema"].mul_(self.ema_beta).add_(R, alpha=1 - self.ema_beta)
+                        if "L_ema" not in state:
+                            state["L_ema"] = L.detach().clone()
+                        else:
+                            state["L_ema"].mul_(self.ema_beta).add_(L, alpha=1 - self.ema_beta)
+                        R_use, L_use = state["R_ema"], state["L_ema"]
+                    else:
+                        R_use, L_use = R, L
+
+                    if self.output_cov_mode == "shampoo":
+                        # Sign mode: no damping, minimal rcond
+                        R_inv_sqrt, opnorm_R, eigmax_R, eigmin_R, _ = self._compute_C_inv_sqrt(R_use, damping=0.0, rcond=1e-12)
+                        L_inv_sqrt, opnorm_L, eigmax_L, eigmin_L, _ = self._compute_C_inv_sqrt(L_use, damping=0.0, rcond=1e-12)
+                    else:
+                        # shampoo_nosign: needs damping to control update scale.
+                        # opnorm_target targets ||update||_op = opnorm_target by default,
+                        # accounting for ||G||_op. With precond_only_opnorm, it only
+                        # targets the preconditioner opnorm (ignoring gradient magnitude).
+                        if self.opnorm_target is not None:
+                            if self.precond_only_opnorm:
+                                side_target = self.opnorm_target ** 0.5
+                            else:
+                                g_opnorm = torch.linalg.svdvals(g_mom.to(torch.float32))[0].item()
+                                side_target = (self.opnorm_target / max(g_opnorm, 1e-12)) ** 0.5
+                        else:
+                            side_target = None
+                        if self.abs_damping is not None:
+                            R_inv_sqrt, opnorm_R, eigmax_R, eigmin_R, delta_R = self._compute_C_inv_sqrt(R_use, abs_damping=self.abs_damping)
+                            L_inv_sqrt, opnorm_L, eigmax_L, eigmin_L, delta_L = self._compute_C_inv_sqrt(L_use, abs_damping=self.abs_damping)
+                        elif self.trace_damping is not None:
+                            R_inv_sqrt, opnorm_R, eigmax_R, eigmin_R, delta_R = self._compute_C_inv_sqrt(R_use, trace_damping=self.trace_damping)
+                            L_inv_sqrt, opnorm_L, eigmax_L, eigmin_L, delta_L = self._compute_C_inv_sqrt(L_use, trace_damping=self.trace_damping)
+                        elif self.per_layer_damping and side_target is not None:
+                            R_inv_sqrt, opnorm_R, eigmax_R, eigmin_R, delta_R = self._compute_C_inv_sqrt(R_use, opnorm_target=side_target)
+                            L_inv_sqrt, opnorm_L, eigmax_L, eigmin_L, delta_L = self._compute_C_inv_sqrt(L_use, opnorm_target=side_target)
+                        else:
+                            R_inv_sqrt, opnorm_R, eigmax_R, eigmin_R, delta_R = self._compute_C_inv_sqrt(R_use, damping=delta_adaptive)
+                            L_inv_sqrt, opnorm_L, eigmax_L, eigmin_L, delta_L = self._compute_C_inv_sqrt(L_use, damping=delta_adaptive)
+
+                    # Diagnostics
+                    self.diagnostics['C_inv_sqrt_opnorm'].append(opnorm_R)
+                    self.diagnostics['C_eigmax'].append(eigmax_R)
+                    self.diagnostics['C_eigmin'].append(eigmin_R)
+                    self.diagnostics['C_out_eigmax'].append(eigmax_L)
+                    self.diagnostics['C_out_eigmin'].append(eigmin_L)
+                    self.diagnostics['delta_per_layer'].append(0.0)
+                    self.diagnostics['delta_out_per_layer'].append(0.0)
+
+                    # Whitened gradient
+                    G_w = L_inv_sqrt.to(g_mom.dtype) @ g_mom @ R_inv_sqrt.to(g_mom.dtype)
+                    if self.output_cov_mode == "shampoo":
+                        update = PolarExpress(G_w, steps=self.ns_steps)
+                    else:
+                        update = G_w  # shampoo_nosign: raw whitened gradient
+
+                    p.data.mul_(1 - lr * wd)
+                    p.data.add_(update, alpha=-lr)
+                    continue
+
+                # Get input covariance
                 C = self._step_cov.get(p, state.get("C_ema", None))
 
+                # Get output covariance (only for sign_only and full)
+                C_out = None
+                if self.output_cov_mode in ("sign_only", "full", "kfac"):
+                    C_out = self._step_cov_out.get(p, state.get("C_out_ema", None))
+
                 if C is not None:
-                    if self.per_layer_damping and self.opnorm_target is not None:
-                        C_inv_sqrt, opnorm, eigmax_C, eigmin_C, delta_used = self._compute_C_inv_sqrt(C, opnorm_target=self.opnorm_target)
-                        self.diagnostics['delta_per_layer'].append(delta_used)
+                    if is_sign_mode:
+                        # Sign modes: no damping, minimal rcond (just prevent numerical zeros)
+                        C_inv_sqrt, opnorm, eigmax_C, eigmin_C, delta_used = self._compute_C_inv_sqrt(C, damping=0.0, rcond=1e-12)
+                        self.diagnostics['delta_per_layer'].append(0.0)
                     else:
-                        C_inv_sqrt, opnorm, eigmax_C, eigmin_C, delta_used = self._compute_C_inv_sqrt(C, damping=delta_adaptive)
+                        # null/full/kfac: opnorm_target or abs_damping controls update scale.
+                        # For null/full (sign modes), ||update||_op = ||C^{-1/2}||_op since sign
+                        # absorbs gradient magnitude — opnorm_target already targets update opnorm.
+                        # For kfac (no sign), ||update||_op ≈ ||C_out^{-1/2}||·||G||·||C_in^{-1/2}||,
+                        # so we adjust per-side target by ||G||_op to keep unified meaning.
+                        if C_out is not None and self.opnorm_target is not None:
+                            if self.output_cov_mode == "kfac" and not self.precond_only_opnorm:
+                                g_opnorm = torch.linalg.svdvals(g_mom.to(torch.float32))[0].item()
+                                side_target = (self.opnorm_target / max(g_opnorm, 1e-12)) ** 0.5
+                            else:
+                                side_target = self.opnorm_target ** 0.5
+                        else:
+                            side_target = self.opnorm_target
+
+                        if self.abs_damping is not None:
+                            C_inv_sqrt, opnorm, eigmax_C, eigmin_C, delta_used = self._compute_C_inv_sqrt(C, abs_damping=self.abs_damping)
+                            self.diagnostics['delta_per_layer'].append(delta_used)
+                        elif self.trace_damping is not None:
+                            C_inv_sqrt, opnorm, eigmax_C, eigmin_C, delta_used = self._compute_C_inv_sqrt(C, trace_damping=self.trace_damping)
+                            self.diagnostics['delta_per_layer'].append(delta_used)
+                        elif self.per_layer_damping and self.opnorm_target is not None:
+                            C_inv_sqrt, opnorm, eigmax_C, eigmin_C, delta_used = self._compute_C_inv_sqrt(C, opnorm_target=side_target)
+                            self.diagnostics['delta_per_layer'].append(delta_used)
+                        else:
+                            C_inv_sqrt, opnorm, eigmax_C, eigmin_C, delta_used = self._compute_C_inv_sqrt(C, damping=delta_adaptive)
                     self.diagnostics['C_inv_sqrt_opnorm'].append(opnorm)
                     self.diagnostics['C_eigmax'].append(eigmax_C)
                     self.diagnostics['C_eigmin'].append(eigmin_C)
-                    # Whiten gradient
-                    G_w = g_mom @ C_inv_sqrt.to(g_mom.dtype)
-                    # Matrix sign via PolarExpress
-                    sign_Gw = PolarExpress(G_w, steps=self.ns_steps)
-                    # LMO update: W -= lr * sign(G C^{-1/2}) @ C^{-1/2}
-                    update = sign_Gw @ C_inv_sqrt.to(sign_Gw.dtype)
+
+                    if self.output_cov_mode == "sign_input":
+                        # sign(G @ C_in^{-1/2}) — unit opnorm, lr controls scale
+                        G_w = g_mom @ C_inv_sqrt.to(g_mom.dtype)
+                        update = PolarExpress(G_w, steps=self.ns_steps)
+
+                    elif self.output_cov_mode in ("sign_only", "full", "kfac") and C_out is not None:
+                        # Output-side C_out^{-1/2}
+                        if is_sign_mode:
+                            C_out_inv_sqrt, _, eigmax_out, eigmin_out, delta_out = self._compute_C_inv_sqrt(C_out, damping=0.0, rcond=1e-12)
+                            self.diagnostics['delta_out_per_layer'].append(0.0)
+                        elif self.abs_damping is not None:
+                            C_out_inv_sqrt, _, eigmax_out, eigmin_out, delta_out = self._compute_C_inv_sqrt(C_out, abs_damping=self.abs_damping)
+                            self.diagnostics['delta_out_per_layer'].append(delta_out)
+                        elif self.trace_damping is not None:
+                            C_out_inv_sqrt, _, eigmax_out, eigmin_out, delta_out = self._compute_C_inv_sqrt(C_out, trace_damping=self.trace_damping)
+                            self.diagnostics['delta_out_per_layer'].append(delta_out)
+                        else:
+                            if self.per_layer_damping and self.opnorm_target is not None:
+                                C_out_inv_sqrt, _, eigmax_out, eigmin_out, delta_out = self._compute_C_inv_sqrt(C_out, opnorm_target=side_target)
+                                self.diagnostics['delta_out_per_layer'].append(delta_out)
+                            else:
+                                C_out_inv_sqrt, _, eigmax_out, eigmin_out, delta_out = self._compute_C_inv_sqrt(C_out, damping=delta_adaptive)
+                        self.diagnostics['C_out_eigmax'].append(eigmax_out)
+                        self.diagnostics['C_out_eigmin'].append(eigmin_out)
+
+                        G_w = C_out_inv_sqrt.to(g_mom.dtype) @ g_mom @ C_inv_sqrt.to(g_mom.dtype)
+
+                        if self.output_cov_mode == "kfac":
+                            # Raw doubly-whitened gradient (no sign)
+                            update = G_w
+                        else:
+                            sign_Gw = PolarExpress(G_w, steps=self.ns_steps)
+
+                            if self.output_cov_mode == "full":
+                                update = C_out_inv_sqrt.to(sign_Gw.dtype) @ sign_Gw @ C_inv_sqrt.to(sign_Gw.dtype)
+                            else:
+                                # sign_only — unit opnorm, lr controls scale
+                                update = sign_Gw
+
+                    else:
+                        # None (null): sign(G @ C^{-1/2}) @ C^{-1/2}
+                        G_w = g_mom @ C_inv_sqrt.to(g_mom.dtype)
+                        sign_Gw = PolarExpress(G_w, steps=self.ns_steps)
+                        update = sign_Gw @ C_inv_sqrt.to(sign_Gw.dtype)
                 else:
                     # Fallback: pure Muon (no whitening available yet)
                     update = PolarExpress(g_mom, steps=self.ns_steps)
@@ -315,5 +521,6 @@ class DAPOpNorm(Optimizer):
             mod._xtx_mults_this_step.zero_()
 
         self._step_cov.clear()
+        self._step_cov_out.clear()
 
         return loss

@@ -1,0 +1,8 @@
+{
+    "lr": [0.02],
+    "opnorm_target": [2.0],
+    "ema_beta": [0.99],
+    "output_cov_mode": ["null", "sign_input", "sign_only", "full"],
+    "max_steps": [100],
+    "schedule_steps": [1906]
+}

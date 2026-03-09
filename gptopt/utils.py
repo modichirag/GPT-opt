@@ -5,9 +5,24 @@ import random
 import yaml
 import hashlib
 import json
+import subprocess
 import torch.distributed as dist
 import os
 from gptopt.optim.dap import LinearWithXtX
+
+
+def get_git_info():
+    """Return git SHA and dirty status for reproducibility tracking."""
+    try:
+        sha = subprocess.check_output(
+            ["git", "rev-parse", "HEAD"], stderr=subprocess.DEVNULL
+        ).decode().strip()
+        dirty = subprocess.check_output(
+            ["git", "status", "--porcelain"], stderr=subprocess.DEVNULL
+        ).decode().strip()
+        return f"dirty-{sha[:12]}" if dirty else sha[:12]
+    except Exception:
+        return "unknown"
 
 def get_data_dir(dataset_name):
     if dataset_name == 'slim_pajama1B':

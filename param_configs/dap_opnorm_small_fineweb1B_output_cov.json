@@ -1,0 +1,6 @@
+{
+    "lr": [0.02],
+    "opnorm_target": [2.0, 3.0, 4.0, 6.0],
+    "ema_beta": [0.99],
+    "output_cov_mode": ["sign_input", "sign_only", "full"]
+}
