@@ -163,7 +163,12 @@ class DAPOpNorm(Optimizer):
             C_f32 = C_f32 + eps * torch.eye(d, device=C_f32.device, dtype=C_f32.dtype)
 
         # Single eigendecomposition of C (after pre-damping for trace, before damping otherwise)
-        eigvals_C, eigvecs = torch.linalg.eigh(C_f32)
+        # Fall back to SVD if eigh fails (ill-conditioned matrices during LR cooldown)
+        try:
+            eigvals_C, eigvecs = torch.linalg.eigh(C_f32)
+        except torch._C._LinAlgError:
+            U, S, Vh = torch.linalg.svd(C_f32)
+            eigvals_C, eigvecs = S.flip(0), U.flip(1)
         eigmax_C = eigvals_C[-1].item()
 
         if opnorm_target is not None:
