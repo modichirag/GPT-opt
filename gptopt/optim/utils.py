@@ -229,6 +229,19 @@ def get_optimizer(opt_config: dict, lr = 1e-3) -> Tuple[torch.optim.Optimizer, d
                   'adamw_eps': opt_config.get('eps', 1e-8),
                   }
 
+    elif name == 'dist-shampoo':
+        from .dist_shampoo_wrapper import DistShampooWrapper
+        opt_obj = DistShampooWrapper
+        hyperp = {'lr': lr,
+                  'wd': opt_config.get('weight_decay', 0.1),
+                  'momentum': opt_config.get('momentum', 0.95),
+                  'beta2': opt_config.get('beta2', 0.8),
+                  'epsilon': opt_config.get('epsilon', 1e-15),
+                  'use_bias_correction': opt_config.get('use_bias_correction', True),
+                  'adamw_betas': opt_config.get('betas', (0.95, 0.95)),
+                  'adamw_eps': opt_config.get('eps', 1e-8),
+                  }
+
     elif name == 'sign-gd':
         opt_obj = SignGD
         hyperp = {'lr': lr,

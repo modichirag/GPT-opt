@@ -1,0 +1,10 @@
+optimizer_params:
+  name: dist-shampoo
+  lr: 0.016
+  weight_decay: 0.1
+  momentum: 0.95
+  beta2: 0.8
+  epsilon: 1.0e-15
+  use_bias_correction: true
+  lr_schedule: warm-up-cosine
+  warm_up_fraction: 0.1

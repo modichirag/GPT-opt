@@ -1,6 +1,7 @@
 *.swp
 figures/
 venv/
+venv39_backup/
 output/
 outputs/
 logs/
