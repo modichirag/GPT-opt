@@ -124,23 +124,64 @@ $\text{opnorm\_target} \in \{1.5, 2.0\}$ are tied; performance degrades for larg
 | DAPOpNorm (shampoo_sign) | 3.518 | 0.02 | +0.079 |
 | DAPOpNorm (kfac_sign) | **3.506** | 0.02 | **+0.091** |
 
-## Scaling: fineweb10B (preliminary)
+## Scaling: fineweb10B
 
-Early results suggest the null-mode advantage over Muon **does not hold at 10B**:
+**GPT-small** (124M params): 4200 optimizer steps (~2.2B tokens),
+$B=512$ sequences/step, single GPU, warmup 10% + cosine decay, $\text{wd}=0.1$.
 
-| Method | Best val (10B) | Best LR |
-|--------|----------------|---------|
-| Muon | **3.383** | 0.02 |
-| DAPOpNorm (null) | 3.447 | 0.03 |
-| DAPOpNorm (kfac_sign) | 3.703* | 0.02 |
+### LR Sweep
 
-*kfac_sign 10B still running (step 2048/4200).
+| lr   | Muon  | null  | kfac_sign | shampoo_sign | full  |
+|------|-------|-------|-----------|--------------|-------|
+| 0.01 | 3.401 | --    | --        | --           | 3.428 |
+| 0.02 | **3.387** | 3.410 | 3.362 | 3.359        | **3.383** |
+| 0.03 | 3.401 | **3.403** | --    | **3.356**    | --    |
+| 0.04 | 3.408 | --    | **3.353** | 3.365        | 3.402 |
+| 0.05 | 3.438 | 3.419 | --       | --           | --    |
+| 0.08 | --    | --    | 3.407     | 3.431        | 3.466 |
+| 0.12 | --    | 3.455 | --       | --           | --    |
 
-This raises questions about whether the 1B improvements reflect genuine algorithmic gains
-or just better sample efficiency on limited data.
+### Summary
+
+| Method | Best val | Best LR | Gain over Muon | Step time |
+|--------|----------|---------|----------------|-----------|
+| Muon | 3.387 | 0.02 | -- | ~3.3s |
+| DAPOpNorm (null) | 3.403 | 0.03 | −0.016 | ~5.7s |
+| DAPOpNorm (full) | 3.383 | 0.02 | +0.004 | ~10s |
+| DAPOpNorm (shampoo_sign) | 3.356 | 0.03 | +0.031 | ~6.3s |
+| DAPOpNorm (kfac_sign) | **3.353** | 0.04 | **+0.034** | ~10s |
+
+### Key Findings
+
+- **kfac_sign and shampoo_sign beat Muon** by 0.034 and 0.031 nats respectively.
+  Both are robust across LRs: kfac_sign beats Muon at lr $\in \{0.02, 0.04\}$,
+  shampoo_sign at lr $\in \{0.02, 0.03, 0.04\}$.
+- **full barely beats Muon** (−0.004), and only at its best LR.
+- **null does not beat Muon at 10B** (+0.016), despite being competitive at 1B (−0.101).
+- **Advantage shrinks from 1B to 10B** for all modes. The biggest gap narrowing is
+  null (−0.101 → +0.016), while kfac_sign (−0.091 → −0.034) and
+  shampoo_sign (−0.079 → −0.031) retain meaningful advantages.
+- **shampoo_sign is the most compute-efficient**: at ~6.3s/step (~1.9$\times$ Muon),
+  it achieves nearly the same gain as kfac_sign which runs at ~10s/step (~3$\times$ Muon).
+- **Numerical stability**: kfac_sign crashed during LR cooldown due to
+  `torch.linalg.eigh` failing on ill-conditioned covariance matrices.
+  Fixed by adding an SVD fallback (`torch.linalg.svd`) when `eigh` raises `LinAlgError`.
+
+### 1B → 10B Scaling Comparison
+
+| Mode | 1B gain over Muon | 10B gain over Muon | Retained |
+|------|-------------------|---------------------|----------|
+| null | +0.101 | −0.016 | 0% |
+| full | +0.064 | +0.004 | 6% |
+| shampoo_sign | +0.079 | +0.031 | 39% |
+| kfac_sign | +0.091 | +0.034 | 37% |
+
+Two-sided preconditioning with sign (kfac_sign, shampoo_sign) retains ~38% of its 1B
+advantage at 10B. Input-only preconditioning (null) loses its advantage entirely.
 
 ## Next Steps
 
-- **Investigate scaling gap**: why does the advantage over Muon shrink at 10B?
+- **Scale further**: test kfac_sign and shampoo_sign at larger model sizes or longer training
+- **Compute-normalized comparison**: compare at equal wall-clock time rather than equal steps
 - **No-sign modes** (kfac, shampoo): see [`docs/plans/nosign_damping.md`](../plans/nosign_damping.md)
 - **Ablations**: weight decay sensitivity, EMA beta sensitivity

@@ -94,8 +94,8 @@ class DAPOpNorm(Optimizer):
         self.opnorm_target = float(opnorm_target) if opnorm_target is not None else None
         self.per_layer_damping = per_layer_damping
 
-        if output_cov_mode not in (None, "sign_input", "kfac_sign", "full", "shampoo_sign", "kfac", "shampoo"):
-            raise ValueError(f"output_cov_mode must be None, 'sign_input', 'kfac_sign', 'full', 'shampoo_sign', 'kfac', or 'shampoo', got {output_cov_mode}")
+        if output_cov_mode not in (None, "sign_input", "kfac_sign", "full", "shampoo_sign", "kfac", "shampoo", "eshampoo"):
+            raise ValueError(f"output_cov_mode must be None, 'sign_input', 'kfac_sign', 'full', 'shampoo_sign', 'kfac', 'shampoo', or 'eshampoo', got {output_cov_mode}")
         self.output_cov_mode = output_cov_mode
         self.abs_damping = float(abs_damping) if abs_damping is not None else None
         self.trace_damping = float(trace_damping) if trace_damping is not None else None
@@ -117,7 +117,7 @@ class DAPOpNorm(Optimizer):
                     raise TypeError(
                         "DAPOpNorm requires LinearWithXtX. Call swap_linears_for_xtx(model) first."
                     )
-                mod._dap_accum_enabled = (self.output_cov_mode not in ("shampoo_sign", "shampoo"))
+                mod._dap_accum_enabled = (self.output_cov_mode not in ("shampoo_sign", "shampoo", "eshampoo"))
                 mod._accum_output_cov = (self.output_cov_mode in ("kfac_sign", "full", "kfac"))
                 self.param_to_module[mod.weight] = mod
                 self.dap_modules.append(mod)
@@ -330,6 +330,81 @@ class DAPOpNorm(Optimizer):
                     g_mom = g.add(buf, alpha=momentum)
                 else:
                     g_mom = buf
+
+                # EShampoo: eigenvalue-corrected Shampoo (SOAP-like)
+                # Uses eigenvectors from gradient covariance but replaces Kronecker
+                # eigenvalues with per-element second moments (like Adam in eigenbasis).
+                if self.output_cov_mode == "eshampoo":
+                    R = g.t() @ g          # [d_in, d_in]
+                    L = g @ g.t()          # [d_out, d_out]
+
+                    # EMA of covariance for eigenbasis
+                    beta2 = self.ema_beta
+                    if beta2 > 0.0:
+                        if "R_ema" not in state:
+                            state["R_ema"] = R.detach().clone()
+                        else:
+                            state["R_ema"].mul_(beta2).add_(R, alpha=1 - beta2)
+                        if "L_ema" not in state:
+                            state["L_ema"] = L.detach().clone()
+                        else:
+                            state["L_ema"].mul_(beta2).add_(L, alpha=1 - beta2)
+                        R_use, L_use = state["R_ema"], state["L_ema"]
+                    else:
+                        R_use, L_use = R, L
+
+                    # Eigendecompose for eigenbasis (not for inverse — we use D_t instead)
+                    R_f32 = R_use.to(torch.float32)
+                    L_f32 = L_use.to(torch.float32)
+                    try:
+                        _, Q_R = torch.linalg.eigh(R_f32)
+                    except torch._C._LinAlgError:
+                        _, _, Vh = torch.linalg.svd(R_f32)
+                        Q_R = Vh.T.flip(1)
+                    try:
+                        _, Q_L = torch.linalg.eigh(L_f32)
+                    except torch._C._LinAlgError:
+                        _, _, Vh = torch.linalg.svd(L_f32)
+                        Q_L = Vh.T.flip(1)
+
+                    # Project gradient into eigenbasis
+                    G_tilde = Q_L.T.to(g.dtype) @ g @ Q_R.to(g.dtype)
+
+                    # Update per-element second moment D_t (Adam-style)
+                    if "D_eshampoo" not in state:
+                        state["D_eshampoo"] = G_tilde.square().detach().clone()
+                    else:
+                        state["D_eshampoo"].mul_(beta2).add_(G_tilde.square(), alpha=1 - beta2)
+
+                    # Bias correction
+                    step_t = state["step"]
+                    bc = 1.0 - beta2 ** step_t if beta2 < 1.0 else 1.0
+                    D_corrected = state["D_eshampoo"] / bc
+
+                    # Project momentum gradient into eigenbasis and scale
+                    M_tilde = Q_L.T.to(g_mom.dtype) @ g_mom @ Q_R.to(g_mom.dtype)
+                    eps = 1e-8
+                    update_tilde = M_tilde / (D_corrected.sqrt() + eps)
+
+                    # Project back to parameter space
+                    update = Q_L.to(update_tilde.dtype) @ update_tilde @ Q_R.T.to(update_tilde.dtype)
+
+                    # Diagnostics
+                    eigmax_R = R_f32.diagonal().max().item()
+                    eigmin_R = R_f32.diagonal().min().item()
+                    eigmax_L = L_f32.diagonal().max().item()
+                    eigmin_L = L_f32.diagonal().min().item()
+                    self.diagnostics['C_inv_sqrt_opnorm'].append(0.0)
+                    self.diagnostics['C_eigmax'].append(eigmax_R)
+                    self.diagnostics['C_eigmin'].append(eigmin_R)
+                    self.diagnostics['C_out_eigmax'].append(eigmax_L)
+                    self.diagnostics['C_out_eigmin'].append(eigmin_L)
+                    self.diagnostics['delta_per_layer'].append(0.0)
+                    self.diagnostics['delta_out_per_layer'].append(0.0)
+
+                    p.data.mul_(1 - lr * wd)
+                    p.data.add_(update, alpha=-lr)
+                    continue
 
                 # Shampoo_sign / shampoo: gradient covariances instead of activation covariances
                 if self.output_cov_mode in ("shampoo_sign", "shampoo"):

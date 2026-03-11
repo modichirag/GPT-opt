@@ -10,4 +10,5 @@ training_params:
   mixed_precision: bfloat16
   compile: True
   mb_subsampling: null
+  max_steps: null
   global_batch_size: ${div:${.tokens_processed}, ${.context_length}}
