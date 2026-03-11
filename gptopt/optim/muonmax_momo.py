@@ -64,7 +64,7 @@ class MuonMaxMomo(torch.optim.Optimizer):
         super().__init__(params, defaults)
 
         for p in muon_params:
-            assert p.ndim == 2
+            assert p.ndim >= 2
             self.state[p]["muon"] = True
 
         for p in adam_params:
@@ -140,7 +140,7 @@ class MuonMaxMomo(torch.optim.Optimizer):
                 if not self.stale_nuc or "prev_nuc_norm" not in state:
                     # Compute nuclear norm from polar factor.
                     m = state["momentum_buffer"]
-                    u = self.polar_fn(m)
+                    u = self.polar_fn(m.view(m.shape[0], -1)).view(m.shape)
                     muon_dual_norm += (m * u).sum()
                 else:
                     # Reuse stale nuclear norm.
@@ -171,7 +171,7 @@ class MuonMaxMomo(torch.optim.Optimizer):
 
             # Apply update.
             m = state["momentum_buffer"]
-            u = self.polar_fn(m)
+            u = self.polar_fn(m.view(m.shape[0], -1)).view(m.shape)
             p.data.mul_(1 - lr * wd)
             p.data.add_(u, alpha=-current_lr * self.muon_lr_scale * muon_dual_norm)
 

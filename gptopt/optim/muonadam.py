@@ -60,7 +60,7 @@ class MuonAdam(torch.optim.Optimizer):
         super().__init__(params, defaults)
 
         for p in muon_params:
-            assert p.ndim == 2
+            assert p.ndim >= 2
             self.state[p]["muon"] = True
 
         for p in adam_params:
@@ -99,7 +99,7 @@ class MuonAdam(torch.optim.Optimizer):
             buf.mul_(momentum).add_(g, alpha=1.0-momentum)
 
             # Apply update.
-            u = self.polar_fn(buf)
+            u = self.polar_fn(buf.view(buf.shape[0], -1)).view(buf.shape)
             p.data.mul_(1 - lr * wd)
             p.data.add_(u, alpha=-lr * self.muon_lr_scale)
 
