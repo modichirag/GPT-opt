@@ -9,6 +9,7 @@ from .muon import Muon
 from .dap import DAP
 from .dap_opnorm import DAPOpNorm
 from .sign_gd import SignGD
+from .shampoo_clean import ShampooClean
 # from .sps import SPS
 # from .adabound import AdaBoundW
 # from .adabelief import AdaBelief
@@ -211,6 +212,21 @@ def get_optimizer(opt_config: dict, lr = 1e-3) -> Tuple[torch.optim.Optimizer, d
                   'l2_prod_norm': l2_prod_norm,
                   'nuc_approx': nuc_approx,
                   'rms_layer_norm': rms_layer_norm,
+                  }
+
+    elif name == 'shampoo-clean':
+        opt_obj = ShampooClean
+        hyperp = {'lr': lr,
+                  'wd': opt_config.get('weight_decay', 0.1),
+                  'momentum': opt_config.get('momentum', 0.95),
+                  'nesterov': opt_config.get('nesterov', True),
+                  'beta2': opt_config.get('beta2', 0.8),
+                  'epsilon': opt_config.get('epsilon', 1e-15),
+                  'exponent': opt_config.get('exponent', 0.5),
+                  'momentum_after': opt_config.get('momentum_after', False),
+                  'use_bias_correction': opt_config.get('use_bias_correction', True),
+                  'adamw_betas': opt_config.get('betas', (0.95, 0.95)),
+                  'adamw_eps': opt_config.get('eps', 1e-8),
                   }
 
     elif name == 'sign-gd':

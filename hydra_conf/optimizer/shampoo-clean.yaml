@@ -1,0 +1,13 @@
+optimizer_params:
+  name: shampoo-clean
+  lr: 0.016
+  weight_decay: 0.1
+  momentum: 0.95
+  nesterov: true
+  beta2: 0.8
+  epsilon: 1.0e-15
+  exponent: 0.5
+  momentum_after: false
+  use_bias_correction: true
+  lr_schedule: warm-up-cosine
+  warm_up_fraction: 0.1

@@ -122,7 +122,7 @@ def main(config : DictConfig):
         model_copy = DDP(model_copy, device_ids=[local_rank])
 
 
-    p = model_copy.named_parameters() if ('muon' in opt_name or 'dap' in opt_name) else model_copy.parameters()
+    p = model_copy.named_parameters() if ('muon' in opt_name or 'dap' in opt_name or 'shampoo' in opt_name) else model_copy.parameters()
 
     if 'dap' in opt_name:
         hyperp['num_microbatches'] = num_microbatches
