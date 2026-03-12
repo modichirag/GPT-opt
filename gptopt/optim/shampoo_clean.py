@@ -83,20 +83,23 @@ class ShampooClean(Optimizer):
     def _matrix_inv_root(self, C, exponent):
         """Compute C^{-exponent} via eigendecomposition with eigenvalue perturbation.
 
-        Matches the PyTorch Distributed Shampoo reference:
-        1. eigh on raw matrix (no ε added before decomposition)
-        2. Clamp negative eigenvalues to 0
-        3. Add ε to all eigenvalues
+        Matches the PyTorch Distributed Shampoo reference (PerturbationConfig):
+        1. Add ε*I before eigendecomposition for numerical stability
+        2. eigh on perturbed matrix
+        3. Shift eigenvalues: if lambda_min < ε, shift all by -lambda_min then add ε
         4. Raise to -exponent
         """
+        C_reg = C + self.epsilon * torch.eye(C.shape[0], device=C.device, dtype=C.dtype)
         try:
-            eigvals, eigvecs = torch.linalg.eigh(C)
+            eigvals, eigvecs = torch.linalg.eigh(C_reg)
         except torch.linalg.LinAlgError:
             # Promote to float64 for ill-conditioned matrices (matches reference retry_double_precision)
-            eigvals, eigvecs = torch.linalg.eigh(C.to(torch.float64))
+            eigvals, eigvecs = torch.linalg.eigh(C_reg.to(torch.float64))
             eigvals = eigvals.to(C.dtype)
             eigvecs = eigvecs.to(C.dtype)
-        eigvals = eigvals.clamp(min=0.0) + self.epsilon
+        lambda_min = eigvals.min().item()
+        if lambda_min < self.epsilon:
+            eigvals = eigvals - lambda_min + self.epsilon
         inv_root_eigvals = eigvals.pow(-exponent)
         return (eigvecs * inv_root_eigvals.unsqueeze(0)) @ eigvecs.T
 
@@ -140,12 +143,18 @@ class ShampooClean(Optimizer):
                 # Weight decay (decoupled)
                 p.data.mul_(1 - lr * wd)
 
-                # Update covariance matrices (using raw gradient, in float32)
-                g_f32 = g.float()
+                # Update covariance matrices using outer products in original grad dtype
+                # (matches DistributedShampoo: torch.tensordot on bfloat16 gradients).
+                # The bfloat16 rounding noise in the outer product provides implicit
+                # regularization for rank-deficient covariance matrices.
                 L = state["L"]
                 R = state["R"]
-                L.mul_(self.beta2).addmm_(g_f32, g_f32.T, alpha=1 - self.beta2)
-                R.mul_(self.beta2).addmm_(g_f32.T, g_f32, alpha=1 - self.beta2)
+                L.mul_(self.beta2).add_(
+                    (g @ g.T).float(), alpha=1 - self.beta2
+                )
+                R.mul_(self.beta2).add_(
+                    (g.T @ g).float(), alpha=1 - self.beta2
+                )
 
                 # Compute momentum (EMA-style, matching reference)
                 buf.mul_(momentum).add_(g, alpha=1 - momentum)

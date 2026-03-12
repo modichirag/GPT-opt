@@ -67,29 +67,34 @@ class DistShampooWrapper(Optimizer):
             max_preconditioner_dim=float("inf"),
             use_bias_correction=use_bias_correction,
             grafting_config=None,
-            preconditioner_config=RootInvShampooPreconditionerConfig(),
+            preconditioner_config=RootInvShampooPreconditionerConfig(
+                inverse_exponent_override={2: 0.5},
+            ),
             distributed_config=SingleDeviceDistributedConfig(target_parameter_dimensionality=2),
         )
 
-        self.adamw_opt = torch.optim.AdamW(
-            adamw_params,
-            lr=lr,
-            weight_decay=wd,
-            betas=adamw_betas,
-            eps=adamw_eps,
-            fused=True,
-        )
+        if adamw_params:
+            self.adamw_opt = torch.optim.AdamW(
+                adamw_params,
+                lr=lr,
+                weight_decay=wd,
+                betas=adamw_betas,
+                eps=adamw_eps,
+                fused=True,
+            )
+        else:
+            self.adamw_opt = None
 
         # Initialize Optimizer base attributes directly so isinstance checks pass
         # and LR schedulers can find param_groups. We skip super().__init__() to
         # avoid interfering with the inner optimizers' state.
         self.defaults = {"lr": lr}
         self.state = {}
-        self._param_groups = self.shampoo_opt.param_groups + self.adamw_opt.param_groups
+        self._param_groups = self.shampoo_opt.param_groups + (self.adamw_opt.param_groups if self.adamw_opt else [])
 
     @property
     def param_groups(self):
-        return self.shampoo_opt.param_groups + self.adamw_opt.param_groups
+        return self.shampoo_opt.param_groups + (self.adamw_opt.param_groups if self.adamw_opt else [])
 
     @param_groups.setter
     def param_groups(self, value):
@@ -97,8 +102,10 @@ class DistShampooWrapper(Optimizer):
 
     def step(self, closure=None):
         self.shampoo_opt.step(closure)
-        self.adamw_opt.step(closure)
+        if self.adamw_opt:
+            self.adamw_opt.step(closure)
 
     def zero_grad(self, set_to_none=True):
         self.shampoo_opt.zero_grad(set_to_none)
-        self.adamw_opt.zero_grad(set_to_none)
+        if self.adamw_opt:
+            self.adamw_opt.zero_grad(set_to_none)
