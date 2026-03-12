@@ -40,6 +40,8 @@ class ShampooClean(Optimizer):
         adamw_betas=(0.95, 0.95),
         adamw_eps=1e-8,
         eshampoo=False,
+        trace_scaling=False,
+        kl_shampoo=False,
     ):
         defaults = dict(
             lr=lr,
@@ -50,12 +52,19 @@ class ShampooClean(Optimizer):
             adamw_eps=adamw_eps,
         )
 
+        if trace_scaling and eshampoo:
+            raise ValueError("trace_scaling=True is not meaningful with eshampoo=True")
+        if kl_shampoo and eshampoo:
+            raise ValueError("kl_shampoo=True is not supported with eshampoo=True")
+
         self.beta2 = beta2
         self.epsilon = epsilon
         self.exponent = exponent
         self.momentum_after = momentum_after
         self.use_bias_correction = use_bias_correction
         self.eshampoo = eshampoo
+        self.trace_scaling = trace_scaling
+        self.kl_shampoo = kl_shampoo
 
         shampoo_params, shampoo_names = [], []
         adamw_params, adamw_names = [], []
@@ -143,6 +152,9 @@ class ShampooClean(Optimizer):
                     state["momentum_buffer"] = torch.zeros_like(g)
                     state["L"] = torch.zeros(m, m, device=g.device, dtype=torch.float32)
                     state["R"] = torch.zeros(n, n, device=g.device, dtype=torch.float32)
+                    if self.kl_shampoo:
+                        state["L_inv_root"] = torch.eye(m, device=g.device, dtype=torch.float32)
+                        state["R_inv_root"] = torch.eye(n, device=g.device, dtype=torch.float32)
 
                 state["step"] += 1
                 step = state["step"]
@@ -157,12 +169,20 @@ class ShampooClean(Optimizer):
                 # regularization for rank-deficient covariance matrices.
                 L = state["L"]
                 R = state["R"]
-                L.mul_(self.beta2).add_(
-                    (g @ g.T).float(), alpha=1 - self.beta2
-                )
-                R.mul_(self.beta2).add_(
-                    (g.T @ g).float(), alpha=1 - self.beta2
-                )
+                if self.kl_shampoo:
+                    L_inv_root = state["L_inv_root"]
+                    R_inv_root = state["R_inv_root"]
+                    G_R = g.float() @ R_inv_root
+                    G_L = L_inv_root @ g.float()
+                    L.mul_(self.beta2).add_(G_R @ G_R.T, alpha=1 - self.beta2)
+                    R.mul_(self.beta2).add_(G_L.T @ G_L, alpha=1 - self.beta2)
+                else:
+                    L.mul_(self.beta2).add_(
+                        (g @ g.T).float(), alpha=1 - self.beta2
+                    )
+                    R.mul_(self.beta2).add_(
+                        (g.T @ g).float(), alpha=1 - self.beta2
+                    )
 
                 # Compute momentum (EMA-style, matching reference)
                 buf.mul_(momentum).add_(g, alpha=1 - momentum)
@@ -222,10 +242,17 @@ class ShampooClean(Optimizer):
                     L_inv = self._matrix_inv_root(L_bc, self.exponent)
                     R_inv = self._matrix_inv_root(R_bc, self.exponent)
 
+                    # Cache inverse roots for next step's KL-Shampoo covariance update
+                    if self.kl_shampoo:
+                        state["L_inv_root"] = L_inv
+                        state["R_inv_root"] = R_inv
+
                     # Apply preconditioning
                     if self.momentum_after:
                         # LaProp-style: precondition raw gradient, then momentum on update
                         precond_g = L_inv @ g.float() @ R_inv
+                        if self.trace_scaling:
+                            precond_g = precond_g / (L_bc.trace().clamp(min=self.epsilon) * R_bc.trace().clamp(min=self.epsilon))
 
                         if "update_buffer" not in state:
                             state["update_buffer"] = torch.zeros_like(precond_g)
@@ -238,6 +265,8 @@ class ShampooClean(Optimizer):
                     else:
                         # Standard: precondition momentum buffer
                         update = L_inv @ g_mom.float() @ R_inv
+                        if self.trace_scaling:
+                            update = update / (L_bc.trace().clamp(min=self.epsilon) * R_bc.trace().clamp(min=self.epsilon))
 
                 p.data.add_(update.to(p.dtype), alpha=-lr)
 

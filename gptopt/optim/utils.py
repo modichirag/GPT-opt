@@ -226,6 +226,8 @@ def get_optimizer(opt_config: dict, lr = 1e-3) -> Tuple[torch.optim.Optimizer, d
                   'momentum_after': opt_config.get('momentum_after', False),
                   'use_bias_correction': opt_config.get('use_bias_correction', True),
                   'eshampoo': opt_config.get('eshampoo', False),
+                  'trace_scaling': opt_config.get('trace_scaling', False),
+                  'kl_shampoo': opt_config.get('kl_shampoo', False),
                   'adamw_betas': opt_config.get('betas', (0.95, 0.95)),
                   'adamw_eps': opt_config.get('eps', 1e-8),
                   }
@@ -239,6 +241,9 @@ def get_optimizer(opt_config: dict, lr = 1e-3) -> Tuple[torch.optim.Optimizer, d
                   'beta2': opt_config.get('beta2', 0.8),
                   'epsilon': opt_config.get('epsilon', 1e-15),
                   'use_bias_correction': opt_config.get('use_bias_correction', True),
+                  'eshampoo': opt_config.get('eshampoo', False),
+                  'kl_shampoo': opt_config.get('kl_shampoo', False),
+                  'exponent': opt_config.get('exponent', 0.5),
                   'adamw_betas': opt_config.get('betas', (0.95, 0.95)),
                   'adamw_eps': opt_config.get('eps', 1e-8),
                   }

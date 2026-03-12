@@ -10,5 +10,7 @@ optimizer_params:
   momentum_after: false
   use_bias_correction: true
   eshampoo: false
+  trace_scaling: false
+  kl_shampoo: false
   lr_schedule: warm-up-cosine
   warm_up_fraction: 0.1

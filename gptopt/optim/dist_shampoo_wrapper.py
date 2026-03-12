@@ -10,6 +10,7 @@ from torch.optim.optimizer import Optimizer
 from distributed_shampoo.distributed_shampoo import DistributedShampoo
 from distributed_shampoo.shampoo_types import (
     DefaultEigenvalueCorrectedShampooConfig,
+    RootInvKLShampooPreconditionerConfig,
     RootInvShampooPreconditionerConfig,
     SingleDeviceDistributedConfig,
     WeightDecayType,
@@ -37,6 +38,8 @@ class DistShampooWrapper(Optimizer):
         adamw_betas=(0.95, 0.95),
         adamw_eps=1e-8,
         eshampoo=False,
+        kl_shampoo=False,
+        exponent=0.5,
     ):
         excluded = ["embeddings", "embed_tokens", "wte", "lm_head", "weight_proj", "wpe"]
         shampoo_params, shampoo_names = [], []
@@ -61,9 +64,13 @@ class DistShampooWrapper(Optimizer):
 
         if eshampoo:
             preconditioner_config = DefaultEigenvalueCorrectedShampooConfig
+        elif kl_shampoo:
+            preconditioner_config = RootInvKLShampooPreconditionerConfig(
+                inverse_exponent_override={2: exponent},
+            )
         else:
             preconditioner_config = RootInvShampooPreconditionerConfig(
-                inverse_exponent_override={2: 0.5},
+                inverse_exponent_override={2: exponent},
             )
 
         self.shampoo_opt = DistributedShampoo(
