@@ -1,0 +1,17 @@
+optimizer_params:
+  name: kl-shampoo
+  lr: 0.003
+  weight_decay: 0.1
+  beta1: 0.95
+  beta2: 0.95
+  shampoo_beta: -1
+  eps: 1.0e-08
+  precondition_frequency: 10
+  using_klsoap: false
+  normalize_grads: false
+  init_factor: 0.1
+  using_damping: false
+  using_clamping: true
+  max_clamp_value: 4000
+  lr_schedule: warm-up-cosine
+  warm_up_fraction: 0.1

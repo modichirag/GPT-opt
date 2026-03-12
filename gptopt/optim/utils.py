@@ -232,6 +232,26 @@ def get_optimizer(opt_config: dict, lr = 1e-3) -> Tuple[torch.optim.Optimizer, d
                   'adamw_eps': opt_config.get('eps', 1e-8),
                   }
 
+    elif name == 'kl-shampoo':
+        from .kl_shampoo_wrapper import KLShampooWrapper
+        opt_obj = KLShampooWrapper
+        hyperp = {'lr': lr,
+                  'wd': opt_config.get('weight_decay', 0.1),
+                  'beta1': opt_config.get('beta1', 0.95),
+                  'beta2': opt_config.get('beta2', 0.95),
+                  'shampoo_beta': opt_config.get('shampoo_beta', -1),
+                  'eps': opt_config.get('eps', 1e-8),
+                  'precondition_frequency': opt_config.get('precondition_frequency', 10),
+                  'using_klsoap': opt_config.get('using_klsoap', False),
+                  'normalize_grads': opt_config.get('normalize_grads', False),
+                  'init_factor': opt_config.get('init_factor', 0.1),
+                  'using_damping': opt_config.get('using_damping', False),
+                  'using_clamping': opt_config.get('using_clamping', True),
+                  'max_clamp_value': opt_config.get('max_clamp_value', 4000),
+                  'adamw_betas': opt_config.get('betas', (0.95, 0.95)),
+                  'adamw_eps': opt_config.get('adamw_eps', 1e-8),
+                  }
+
     elif name == 'dist-shampoo':
         from .dist_shampoo_wrapper import DistShampooWrapper
         opt_obj = DistShampooWrapper
