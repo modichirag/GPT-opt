@@ -225,6 +225,7 @@ def get_optimizer(opt_config: dict, lr = 1e-3) -> Tuple[torch.optim.Optimizer, d
                   'exponent': opt_config.get('exponent', 0.5),
                   'momentum_after': opt_config.get('momentum_after', False),
                   'use_bias_correction': opt_config.get('use_bias_correction', True),
+                  'eshampoo': opt_config.get('eshampoo', False),
                   'adamw_betas': opt_config.get('betas', (0.95, 0.95)),
                   'adamw_eps': opt_config.get('eps', 1e-8),
                   }

@@ -9,5 +9,6 @@ optimizer_params:
   exponent: 0.5
   momentum_after: false
   use_bias_correction: true
+  eshampoo: false
   lr_schedule: warm-up-cosine
   warm_up_fraction: 0.1

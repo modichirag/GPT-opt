@@ -9,6 +9,7 @@ import torch
 from torch.optim.optimizer import Optimizer
 from distributed_shampoo.distributed_shampoo import DistributedShampoo
 from distributed_shampoo.shampoo_types import (
+    DefaultEigenvalueCorrectedShampooConfig,
     RootInvShampooPreconditionerConfig,
     SingleDeviceDistributedConfig,
     WeightDecayType,
@@ -35,6 +36,7 @@ class DistShampooWrapper(Optimizer):
         use_bias_correction=True,
         adamw_betas=(0.95, 0.95),
         adamw_eps=1e-8,
+        eshampoo=False,
     ):
         excluded = ["embeddings", "embed_tokens", "wte", "lm_head", "weight_proj", "wpe"]
         shampoo_params, shampoo_names = [], []
@@ -57,6 +59,13 @@ class DistShampooWrapper(Optimizer):
             print(f"  - {name}")
         print(f"=====================================================\n")
 
+        if eshampoo:
+            preconditioner_config = DefaultEigenvalueCorrectedShampooConfig
+        else:
+            preconditioner_config = RootInvShampooPreconditionerConfig(
+                inverse_exponent_override={2: 0.5},
+            )
+
         self.shampoo_opt = DistributedShampoo(
             shampoo_params,
             lr=lr,
@@ -65,11 +74,10 @@ class DistShampooWrapper(Optimizer):
             weight_decay=wd,
             weight_decay_type=WeightDecayType.DECOUPLED,
             max_preconditioner_dim=float("inf"),
+            precondition_frequency=1,
             use_bias_correction=use_bias_correction,
             grafting_config=None,
-            preconditioner_config=RootInvShampooPreconditionerConfig(
-                inverse_exponent_override={2: 0.5},
-            ),
+            preconditioner_config=preconditioner_config,
             distributed_config=SingleDeviceDistributedConfig(target_parameter_dimensionality=2),
         )
 

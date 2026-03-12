@@ -13,7 +13,13 @@ class ShampooClean(Optimizer):
         R_t = β₂ R_{t-1} + (1-β₂) G_tᵀ G_t
         update = (L_t + εI)^{-p} M_t (R_t + εI)^{-p}
 
-    where M_t is the momentum buffer and p is the exponent (0.5 for Shampoo^{1/2}).
+    EShampoo mode (eshampoo=True): eigenvalue-corrected Shampoo (SOAP).
+    Uses eigenvectors from gradient covariance but replaces Kronecker
+    eigenvalues with per-element second moments (Adam in eigenbasis):
+        Q_L, Q_R = eigenvectors of L_t, R_t
+        G̃ = Q_Lᵀ G Q_R  (project to eigenbasis)
+        D_t = β₂ D_{t-1} + (1-β₂) G̃²  (per-element second moment)
+        update = Q_L (M̃ / (D_t^p + ε)) Q_Rᵀ
 
     2D non-embedding params get Shampoo; everything else gets AdamW.
     No grafting, no block partitioning, no Newton-Schulz iterations.
@@ -33,6 +39,7 @@ class ShampooClean(Optimizer):
         use_bias_correction=True,
         adamw_betas=(0.95, 0.95),
         adamw_eps=1e-8,
+        eshampoo=False,
     ):
         defaults = dict(
             lr=lr,
@@ -48,6 +55,7 @@ class ShampooClean(Optimizer):
         self.exponent = exponent
         self.momentum_after = momentum_after
         self.use_bias_correction = use_bias_correction
+        self.eshampoo = eshampoo
 
         shampoo_params, shampoo_names = [], []
         adamw_params, adamw_names = [], []
@@ -173,27 +181,63 @@ class ShampooClean(Optimizer):
                     R_bc = R / bc2
                 else:
                     L_bc, R_bc = L, R
+                    bc2 = 1.0
 
-                # Compute preconditioners
-                L_inv = self._matrix_inv_root(L_bc, self.exponent)
-                R_inv = self._matrix_inv_root(R_bc, self.exponent)
+                if self.eshampoo:
+                    # EShampoo: Adam in the eigenbasis of Shampoo's preconditioner
+                    # Eigendecompose covariances for eigenbasis (no inverse root needed)
+                    L_reg = L_bc + self.epsilon * torch.eye(m, device=g.device, dtype=L_bc.dtype)
+                    R_reg = R_bc + self.epsilon * torch.eye(n, device=g.device, dtype=R_bc.dtype)
+                    try:
+                        _, Q_L = torch.linalg.eigh(L_reg)
+                    except torch.linalg.LinAlgError:
+                        _, Q_L = torch.linalg.eigh(L_reg.to(torch.float64))
+                        Q_L = Q_L.to(L_bc.dtype)
+                    try:
+                        _, Q_R = torch.linalg.eigh(R_reg)
+                    except torch.linalg.LinAlgError:
+                        _, Q_R = torch.linalg.eigh(R_reg.to(torch.float64))
+                        Q_R = Q_R.to(R_bc.dtype)
 
-                # Apply preconditioning
-                if self.momentum_after:
-                    # LaProp-style: precondition raw gradient, then momentum on update
-                    precond_g = L_inv @ g.float() @ R_inv
+                    # Project gradient into eigenbasis: G̃ = Q_Lᵀ g Q_R
+                    G_tilde = Q_L.T @ g.float() @ Q_R
 
-                    if "update_buffer" not in state:
-                        state["update_buffer"] = torch.zeros_like(precond_g)
-                    ubuf = state["update_buffer"]
-                    ubuf.mul_(momentum).add_(precond_g)
-                    if nesterov:
-                        update = precond_g + momentum * ubuf
-                    else:
-                        update = ubuf
+                    # Track per-element second moment D_t (Adam-style in eigenbasis)
+                    if "D_eshampoo" not in state:
+                        state["D_eshampoo"] = torch.zeros(m, n, device=g.device, dtype=torch.float32)
+                    D = state["D_eshampoo"]
+                    D.mul_(self.beta2).add_(G_tilde.square(), alpha=1 - self.beta2)
+
+                    # Bias-correct D
+                    D_corrected = D / bc2
+
+                    # Project momentum into eigenbasis and scale by corrected eigenvalues
+                    M_tilde = Q_L.T @ g_mom.float() @ Q_R
+                    update_tilde = M_tilde / (D_corrected.pow(self.exponent).add_(self.epsilon))
+
+                    # Project back to parameter space
+                    update = Q_L @ update_tilde @ Q_R.T
                 else:
-                    # Standard: precondition momentum buffer
-                    update = L_inv @ g_mom.float() @ R_inv
+                    # Standard Shampoo: compute inverse root preconditioners
+                    L_inv = self._matrix_inv_root(L_bc, self.exponent)
+                    R_inv = self._matrix_inv_root(R_bc, self.exponent)
+
+                    # Apply preconditioning
+                    if self.momentum_after:
+                        # LaProp-style: precondition raw gradient, then momentum on update
+                        precond_g = L_inv @ g.float() @ R_inv
+
+                        if "update_buffer" not in state:
+                            state["update_buffer"] = torch.zeros_like(precond_g)
+                        ubuf = state["update_buffer"]
+                        ubuf.mul_(momentum).add_(precond_g)
+                        if nesterov:
+                            update = precond_g + momentum * ubuf
+                        else:
+                            update = ubuf
+                    else:
+                        # Standard: precondition momentum buffer
+                        update = L_inv @ g_mom.float() @ R_inv
 
                 p.data.add_(update.to(p.dtype), alpha=-lr)
 
