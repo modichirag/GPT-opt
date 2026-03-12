@@ -256,7 +256,7 @@ class ShampooClean(Optimizer):
                         # LaProp-style: precondition raw gradient, then momentum on update
                         precond_g = L_inv @ g.float() @ R_inv
                         if self.trace_scaling:
-                            precond_g = precond_g / (L_bc.trace().clamp(min=self.epsilon) * R_bc.trace().clamp(min=self.epsilon))
+                            precond_g = precond_g * (L_bc.trace().clamp(min=self.epsilon) * R_bc.trace().clamp(min=self.epsilon)).pow(self.exponent)
 
                         if "update_buffer" not in state:
                             state["update_buffer"] = torch.zeros_like(precond_g)
@@ -270,7 +270,7 @@ class ShampooClean(Optimizer):
                         # Standard: precondition momentum buffer
                         update = L_inv @ g_mom.float() @ R_inv
                         if self.trace_scaling:
-                            update = update / (L_bc.trace().clamp(min=self.epsilon) * R_bc.trace().clamp(min=self.epsilon))
+                            update = update * (L_bc.trace().clamp(min=self.epsilon) * R_bc.trace().clamp(min=self.epsilon)).pow(self.exponent)
 
                 p.data.add_(update.to(p.dtype), alpha=-lr)
 
