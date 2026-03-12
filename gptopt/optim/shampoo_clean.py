@@ -172,10 +172,12 @@ class ShampooClean(Optimizer):
                 if self.kl_shampoo:
                     L_inv_root = state["L_inv_root"]
                     R_inv_root = state["R_inv_root"]
-                    G_R = g.float() @ R_inv_root
-                    G_L = L_inv_root @ g.float()
-                    L.mul_(self.beta2).add_(G_R @ G_R.T, alpha=1 - self.beta2)
-                    R.mul_(self.beta2).add_(G_L.T @ G_L, alpha=1 - self.beta2)
+                    # Cast preconditioned grad back to original dtype before outer product
+                    # (matches Meta's _precondition_grad which returns grad.dtype)
+                    G_R = (g.float() @ R_inv_root).to(g.dtype)
+                    G_L = (L_inv_root @ g.float()).to(g.dtype)
+                    L.mul_(self.beta2).add_((G_R @ G_R.T).float(), alpha=1 - self.beta2)
+                    R.mul_(self.beta2).add_((G_L.T @ G_L).float(), alpha=1 - self.beta2)
                 else:
                     L.mul_(self.beta2).add_(
                         (g @ g.T).float(), alpha=1 - self.beta2
@@ -195,8 +197,10 @@ class ShampooClean(Optimizer):
                     g_mom = g + momentum * g_mom
 
                 # Bias-correct covariance before computing preconditioners
+                # Use float32 tensor arithmetic to match Meta's DistributedShampoo reference
+                # (Python float64 bc2 causes tiny rounding diffs that amplify in KL feedback loop)
                 if self.use_bias_correction and self.beta2 < 1.0:
-                    bc2 = 1 - self.beta2 ** step
+                    bc2 = torch.tensor(1.0) - self.beta2 ** torch.tensor(step)
                     L_bc = L / bc2
                     R_bc = R / bc2
                 else:
