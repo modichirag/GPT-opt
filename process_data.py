@@ -24,7 +24,7 @@ data_settings = {
         "load_kwargs": {"name": "wikitext-103-v1"},
     },
     "slim_pajama": {
-        "load_args": ["cerebras/SlimPajama-627B"],
+        "load_args": ["venketh/SlimPajama-62B"], # "cerebras/SlimPajama-627B" was deleted from the huggingface datasets hub? Using a copy
         "load_kwargs": {"split": "train", "streaming": True},
     }
 }

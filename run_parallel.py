@@ -19,8 +19,7 @@ get_launch_script = lambda name: f"""#!/bin/bash
 #SBATCH --constraint=h100
 #SBATCH --gpus-per-task=1
 #SBATCH --cpus-per-task=2
-#SBATCH --time=1-00:00:00
-#SBATCH --exclusive
+#SBATCH --time=3-00:00:00
 #SBATCH -o {LOG_DIR}/{name}.log
 
 export OMP_NUM_THREADS=1
