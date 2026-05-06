@@ -32,6 +32,7 @@ def apply_style():
 # Apply initially (in case functions used standalone)
 apply_style()
 
+
 def load_outputs(output_dir):
     outputs = []
     for file_name in os.listdir(output_dir):
@@ -150,11 +151,22 @@ def main(config_file=None):
     default_config = get_default_config()
     if config_file:
         config = load_config(default_config, config_file)
-    outfilename = config_file.replace("configs/", "").replace('.yaml', '')
-    output_dir = f"gptopt/outputs/{outfilename}"
-    outputs = load_outputs(output_dir)
+    outfilename = config_file.replace("configs/", "").replace('.yaml', '').replace('.yml', '')
+    output_root = "gptopt/outputs"
+    output_dirs = [
+        os.path.join(output_root, name)
+        for name in os.listdir(output_root)
+        if name == outfilename or (
+            name.startswith(outfilename + '-')
+            and name[len(outfilename) + 1:].isdigit()
+        )
+    ]
+    output_dirs.sort(key=lambda path: (len(os.path.basename(path)), os.path.basename(path)))
+    outputs = []
+    for output_dir in output_dirs:
+        outputs.extend(load_outputs(output_dir))
 
-    print(f"Loaded {len(outputs)} outputs from {output_dir}")
+    print(f"Loaded {len(outputs)} outputs from {output_dirs}")
 
     for output in outputs:
         smoothen_dict(output, num_points=None, beta=0.05)
