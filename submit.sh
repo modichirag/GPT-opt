@@ -9,7 +9,7 @@ sbatch <<EOF
 #SBATCH --cpus-per-gpu=8
 #SBATCH --time=150:00:00
 #SBATCH --partition=gpu
-#SBATCH --constraint=a100
+#SBATCH --constraint=h100
 #SBATCH -o output/slurm_logs/${CONFIG_NAME}.log
 
 export OMP_NUM_THREADS=1

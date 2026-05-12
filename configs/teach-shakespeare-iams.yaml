@@ -1,58 +1,58 @@
 # config.yaml
 optimizer_params:
   # - name: adamw
-  #   lr: [0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.3]
+  #   lr: [0.00005] #[0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.3]
   #   weight_decay: 0.0
-  #   lr_schedule: warm-up-constant-linear
+  #   lr_schedule: constant
   #   warm_up_fraction: 0.1
   #   cool_down_fraction: 0.1
 
   - name: iams
-    lr: [ 0.01, 0.05, 0.1, 0.3]  # 1.0
+    lr: [0.5] # [0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.3]  # 1.0
     weight_decay: 0.0
     lr_schedule: constant
 
 
   - name: sgd-schedulep
-    lr: [ 0.01, 0.05, 0.1, 0.3]  # 1.0
+    lr: [0.5] # [0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.3] # 1.0
     weight_decay: 0.0
     lr_schedule: constant
     ct_schedule: 0.1
 
 
-  # - name: sgd-schedulefree
-  #   lr: [0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.3]  # 0.05
+  - name: sgd-schedulefree
+    lr: [0.5] # [0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.3]  # 0.05
+    weight_decay: 0.0
+    lr_schedule: constant
+    warm_up_fraction: 0.1
+    cool_down_fraction: 0.1
+
+
+  # - name: adamw-schedulep 
+  #   lr: [ 0.01, 0.05, 0.1, 0.3]  # 1.0
+  #   # lr: [0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.3]
   #   weight_decay: 0.0
-  #   lr_schedule: warm-up-constant-linear
-  #   warm_up_fraction: 0.1
-  #   cool_down_fraction: 0.1
-
-
-  - name: adamw-schedulep 
-    lr: [ 0.01, 0.05, 0.1, 0.3]  # 1.0
-    # lr: [0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.3]
-    weight_decay: 0.0
-    lr_schedule: constant
-    ct_schedule: 0.1
+  #   lr_schedule: constant
+  #   ct_schedule: 0.1
 
   # - name: adamw-schedulefree
   #   lr: [0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.3]
   #   weight_decay: 0.0
-  #   lr_schedule: warm-up-constant-linear
+  #   lr_schedule: constant
   #   warm_up_fraction: 0.1
   #   cool_down_fraction: 0.1
     
-  - name: iams-adam
-    lr: [ 0.01, 0.05, 0.1, 0.3]  # 1.0
-    # lr: [0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.3]  # 0.05
-    weight_decay: 0.0
-    lr_schedule: constant
+  # - name: iams-adam
+  #   lr: [ 0.01, 0.05, 0.1, 0.3]  # 1.0
+  #   # lr: [0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.3]  # 0.05
+  #   weight_decay: 0.0
+  #   lr_schedule: constant
 
 
   # - name: sgd-m
-  #   lr: [0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.3]  # 0.05
+  #   lr: [0.00005] # [0.0001, 0.0005, 0.001, 0.005, 0.01, 0.05, 0.1, 0.3]  # 0.05
   #   weight_decay: 0.0
-  #   lr_schedule: warm-up-constant-linear
+  #   lr_schedule: constant
   #   warm_up_fraction: 0.1
   #   cool_down_fraction: 0.0
 
