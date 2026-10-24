@@ -7,6 +7,7 @@ from gptopt.optim.utils import get_scheduler, get_optimizer
 from gptopt.utils import hash_config, set_seed, get_worker_info
 #from gptopt.utils import get_default_config, load_config
 from gptopt.model import load_model
+from gptopt.gpt_model import CausalSelfAttention
 from gptopt.dataloader import DATA_DIR, ShardedDataLoader
 from torch.nn.parallel import DistributedDataParallel as DDP
 import torch.distributed as dist
@@ -117,6 +118,12 @@ for opt_config in list_optimizer_params:
             ]
 
             optimizer = optimizer_obj(muon_params, adam_params, **hyperp)
+        elif opt_config["name"] == "angd":
+            assert config['gpt_model'].get('split_qkv', False), "ANGD requires gpt_model.split_qkv: True"
+            attn_modules = [m for m in model_copy.modules() if isinstance(m, CausalSelfAttention)]
+            angd_param_ids = {id(p) for m in attn_modules for p in (m.c_q.weight, m.c_k.weight)}
+            adam_params = [p for p in model_copy.parameters() if id(p) not in angd_param_ids]
+            optimizer = optimizer_obj(attn_modules, adam_params, **hyperp)
         else:
             named_keywords = ["muon", "nesgd"]
             p = model_copy.named_parameters() if any([key in opt_config['name'] for key in named_keywords]) else model_copy.parameters()

@@ -17,8 +17,15 @@ class CausalSelfAttention(nn.Module):
     def __init__(self, config):
         super().__init__()
         assert config.n_embd % config.n_head == 0
-        # key, query, value projections for all heads, but in a batch
-        self.c_attn = nn.Linear(config.n_embd, 3 * config.n_embd)
+        self.split_qkv = config.split_qkv
+        if self.split_qkv:
+            # separate query, key, value projections, with no query/key bias (needed by ANGD)
+            self.c_q = nn.Linear(config.n_embd, config.n_embd, bias=False)
+            self.c_k = nn.Linear(config.n_embd, config.n_embd, bias=False)
+            self.c_v = nn.Linear(config.n_embd, config.n_embd)
+        else:
+            # key, query, value projections for all heads, but in a batch
+            self.c_attn = nn.Linear(config.n_embd, 3 * config.n_embd)
         # output projection
         self.c_proj = nn.Linear(config.n_embd, config.n_embd)
         self.c_proj.LLMC_RESIDUAL_SCALE_FLAG = 1
@@ -28,12 +35,20 @@ class CausalSelfAttention(nn.Module):
         self.flash_attention = config.flash_attention
         self.register_buffer("causal_mask", torch.tril(torch.ones(config.block_size, config.block_size))
                                      .view(1, 1, config.block_size, config.block_size))
+        # the ANGD optimizer sets angd_capture, and reads the stored input to compute its preconditioner
+        self.angd_capture = False
+        self.angd_input = None
 
     def forward(self, x):
         B, T, C = x.size() # batch size, sequence length, embedding dimensionality (n_embd)
         # calculate query, key, values for all heads in batch and move head forward to be the batch dim
-        qkv = self.c_attn(x)
-        q, k, v = qkv.split(self.n_embd, dim=2)
+        if self.split_qkv:
+            if self.angd_capture and self.training:
+                self.angd_input = x.detach()
+            q, k, v = self.c_q(x), self.c_k(x), self.c_v(x)
+        else:
+            qkv = self.c_attn(x)
+            q, k, v = qkv.split(self.n_embd, dim=2)
         k = k.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
         q = q.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
         v = v.view(B, T, self.n_head, C // self.n_head).transpose(1, 2) # (B, nh, T, hs)
@@ -50,6 +65,62 @@ class CausalSelfAttention(nn.Module):
         # output projection
         y = self.c_proj(y)
         return y
+
+    @torch.no_grad()
+    def angd_fisher_diag(self, x, chunk_size=4):
+        """
+        Diagonal of the Fisher information of the attention distributions w.r.t.
+        c_q.weight and c_k.weight, averaged over all queries in the batch. Each head
+        uses the single-head formulas on its own rows of c_q.weight and c_k.weight:
+            D_K = (Q*Q) V_X^T / hs,  V_X = E_p[x*x] - E_p[x]*E_p[x]
+            D_Q = V_K (X*X)^T / hs,  V_K = E_p[k*k] - E_p[k]*E_p[k]
+        where E_p averages keys under each query's attention distribution.
+        Args:
+            x: Input to the attention layer, shape (B, T, C).
+            chunk_size: Number of sequences processed at once, to bound memory.
+        Returns:
+            D_Q, D_K, each with the shape of c_q.weight.
+        """
+        assert self.split_qkv
+        B, T, C = x.size()
+        H, hs = self.n_head, C // self.n_head
+        dtype = torch.promote_types(x.dtype, torch.float32)
+        Wq, Wk = self.c_q.weight.to(dtype), self.c_k.weight.to(dtype)
+        mask = self.causal_mask[0, 0, :T, :T] == 0
+        D_Q = torch.zeros(H, hs, C, dtype=dtype, device=x.device)
+        D_K = torch.zeros(H, hs, C, dtype=dtype, device=x.device)
+
+        # Variances are computed as differences E[a^2] - E[a]^2, so avoid TF32 matmuls, and
+        # subtract per-sequence means (variance is invariant to shifts) to reduce cancellation.
+        matmul_precision = torch.get_float32_matmul_precision()
+        torch.set_float32_matmul_precision("highest")
+        try:
+            for xb in x.to(dtype).split(chunk_size):
+                b = xb.size(0)
+                q = (xb @ Wq.t()).view(b, T, H, hs).transpose(1, 2) # (b, nh, T, hs)
+                k = (xb @ Wk.t()).view(b, T, H, hs).transpose(1, 2) # (b, nh, T, hs)
+                att = (q @ k.transpose(-2, -1)) * (1.0 / math.sqrt(hs))
+                att = att.masked_fill(mask, float('-inf'))
+                P = F.softmax(att, dim=-1) # (b, nh, T, T), rows are queries
+
+                # D_K. The E_p[x*x] term is contracted with Q*Q before multiplying with x*x, which
+                # avoids a (b, nh, T, C) intermediate. The E_p[x]^2 term can't be, so we pay for P @ x.
+                xc = xb - xb.mean(dim=1, keepdim=True)
+                q2 = q.square()
+                D_K += torch.einsum('bhai,baj->hij', P.transpose(-2, -1) @ q2, xc.square())
+                D_K -= torch.einsum('bhli,bhlj->hij', q2, (P @ xc.unsqueeze(1)).square())
+
+                # D_Q.
+                kc = k - k.mean(dim=2, keepdim=True)
+                VK = P @ kc.square() - (P @ kc).square()
+                D_Q += torch.einsum('bhli,blj->hij', VK, xb.square())
+        finally:
+            torch.set_float32_matmul_precision(matmul_precision)
+
+        scale = 1.0 / (hs * B * T)
+        D_Q = (D_Q * scale).clamp_(min=0).view(C, C)
+        D_K = (D_K * scale).clamp_(min=0).view(C, C)
+        return D_Q, D_K
 
 class MLP(nn.Module):
 
@@ -90,6 +161,7 @@ class GPTConfig:
     n_layer: int = 12
     n_head: int = 12
     n_embd: int = 768
+    split_qkv: bool = False
 
 class GPT(nn.Module):
 

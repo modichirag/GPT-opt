@@ -59,6 +59,7 @@ def load_model(config, device):
     gptconfig.n_layer = config['n_layer']
     gptconfig.n_head = config['n_head']
     gptconfig.vocab_size = config['vocab_size']
+    gptconfig.split_qkv = config.get('split_qkv', False)
     model = GPT(gptconfig, device, flash_attention=config['flash_attention'])
     return model
 

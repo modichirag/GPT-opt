@@ -14,6 +14,7 @@ from .sign_gd import SignGD
 from .lion import Lion
 from .adan import Adan
 from .sophia import SophiaG
+from .angd import ANGD
 # from .sps import SPS
 # from .adabound import AdaBoundW
 # from .adabelief import AdaBelief
@@ -209,6 +210,18 @@ def get_optimizer(opt_config: dict, lr = 1e-3) -> Tuple[torch.optim.Optimizer, d
                   'adamw_betas': opt_config.get('betas', (0.95, 0.95)),
                   'truncate_loss': truncate_loss,
                   }
+
+    elif name == "angd":
+        opt_obj = ANGD
+        hyperp = {'lr': lr,
+                  'angd_lr_scale': opt_config.get('angd_lr_scale', 1.0),
+                  'wd': opt_config.get('weight_decay', 0),
+                  'betas': opt_config.get('betas', (0.95, 0.95)),
+                  'eps': opt_config.get('eps', 1e-8),
+                  'precond_every': opt_config.get('precond_every', 1),
+                  'fisher_batch': opt_config.get('fisher_batch', None),
+                  'fisher_chunk': opt_config.get('fisher_chunk', 4),
+                 }
 
     elif name == 'sign-gd':
         opt_obj = SignGD
