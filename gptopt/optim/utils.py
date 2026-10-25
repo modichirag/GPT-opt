@@ -15,6 +15,7 @@ from .lion import Lion
 from .adan import Adan
 from .sophia import SophiaG
 from .angd import ANGD
+from .qwop import Qwop
 # from .sps import SPS
 # from .adabound import AdaBoundW
 # from .adabelief import AdaBelief
@@ -210,6 +211,16 @@ def get_optimizer(opt_config: dict, lr = 1e-3) -> Tuple[torch.optim.Optimizer, d
                   'adamw_betas': opt_config.get('betas', (0.95, 0.95)),
                   'truncate_loss': truncate_loss,
                   }
+
+    elif name == "qwop":
+        opt_obj = Qwop
+        hyperp = {'lr': lr,
+                  'wd': opt_config.get('weight_decay', 0),
+                  'ns_steps': opt_config.get('ns_steps', 5),
+                  'polar_method': opt_config.get('polar_method', "polar_express"),
+                  'betas': opt_config.get('betas', (0.95, 0.95)),
+                  'eps': opt_config.get('eps', 1e-8),
+                 }
 
     elif name == "angd":
         opt_obj = ANGD

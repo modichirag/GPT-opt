@@ -64,7 +64,9 @@ def load_outputs(results_dir, config_dir):
         output['method'] = name
         if len(settings) > 0:
             output['method'] += " (" + ", ".join(f"{k}={v}" for k, v in zip(varying_keys[name], settings)) + ")"
-        output['sort_key'] = (name, settings, output['lr'])
+        # Settings can mix types (e.g. muon_lr_scale of 10.0 or "moonlight"), so sort numbers before strings.
+        settings_key = [(0, v, "") if isinstance(v, (int, float)) else (1, 0, str(v)) for v in settings]
+        output['sort_key'] = (name, settings_key, output['lr'])
 
     return sorted(outputs, key=lambda output: output['sort_key'])
 

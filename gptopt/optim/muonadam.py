@@ -1,3 +1,5 @@
+from math import sqrt
+
 import torch
 
 from .polar import zeropower_via_newtonschulz5, PolarExpress, SVDPolarFactor
@@ -98,10 +100,18 @@ class MuonAdam(torch.optim.Optimizer):
             buf = state["momentum_buffer"]
             buf.mul_(momentum).add_(g, alpha=1.0-momentum)
 
+            # Compute lr scale for layer.
+            if self.muon_lr_scale == "moonlight":
+                m = buf.shape[0]
+                n = buf.shape[1:].numel()
+                layer_lr = 0.2 * lr * sqrt(max(m, n))
+            else:
+                layer_lr = lr * self.muon_lr_scale
+
             # Apply update.
             u = self.polar_fn(buf.view(buf.shape[0], -1)).view(buf.shape)
             p.data.mul_(1 - lr * wd)
-            p.data.add_(u, alpha=-lr * self.muon_lr_scale)
+            p.data.add_(u, alpha=-layer_lr)
 
         # Update Adam parameters.
         for p in group["params"]:
