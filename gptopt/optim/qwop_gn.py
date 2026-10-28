@@ -17,8 +17,7 @@ class QwopGN(torch.optim.Optimizer):
         eps: epsilon for adam.
         gamma: EMA coefficient for layerwise-curvature matrix.
         ridge: Ridge regularization added to the layerwise-curvature matrix before
-            inverting, relative to the mean of its diagonal (i.e. M + ridge *
-            mean(diag(M)) * I).
+            inverting.
     """
     def __init__(
         self,
@@ -31,7 +30,7 @@ class QwopGN(torch.optim.Optimizer):
         betas=(0.95, 0.95),
         eps=1e-8,
         gamma=0.95,
-        ridge=1e-2,
+        ridge=1e-3,
     ):
 
         assert isinstance(muon_params, list)
@@ -148,9 +147,8 @@ class QwopGN(torch.optim.Optimizer):
         M = state["lr_precond"]
         M.mul_(self.gamma).add_(torch.outer(u, u), alpha=1.0-self.gamma)
 
-        # Compute layer-wise learning rates. Ridge is relative to the mean diagonal.
-        ridge = self.ridge * M.diagonal().mean()
-        eta = torch.linalg.solve(M + ridge * torch.eye(self.num_layers, device=device), d)
+        # Compute layer-wise learning rates.
+        eta = torch.linalg.solve(M + self.ridge * torch.eye(self.num_layers, device=device), d)
 
         # Second pass over Muon parameters (apply update).
         for p in group["params"]:
