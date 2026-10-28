@@ -99,7 +99,7 @@ for opt_config in list_optimizer_params:
         optimizer_obj, hyperp = get_optimizer(opt_config, lr=lr)
 
         # temp
-        if opt_config["name"] in ["muonadam", "muonadam-momo", "muonmax-momo", "qwop"]:
+        if opt_config["name"] in ["muonadam", "muonadam-momo", "muonmax-momo", "qwop_adam", "qwop_gn"]:
 
             muon_param_names = [
                 name for name, p in model_copy.named_parameters()

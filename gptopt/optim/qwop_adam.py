@@ -3,7 +3,7 @@ import torch
 from .polar import zeropower_via_newtonschulz5, PolarExpress, SVDPolarFactor
 
 
-class Qwop(torch.optim.Optimizer):
+class QwopAdam(torch.optim.Optimizer):
     """
     Arguments:
         muon_params: Parameters to be optimized with Muon.

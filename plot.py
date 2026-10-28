@@ -71,6 +71,22 @@ def load_outputs(results_dir, config_dir):
     return sorted(outputs, key=lambda output: output['sort_key'])
 
 
+def set_colors_and_legend_style(ax, num_curves):
+    """
+    When there are more curves than default colors, cycle through the default colors again with a different
+    line style (solid, dashed, dotted, ...), so that no two curves look the same. Returns legend kwargs placing
+    the legend outside the axes.
+    """
+    colors = plt.rcParams['axes.prop_cycle'].by_key()['color']
+    if num_curves > len(colors):
+        styles = ['-', '--', ':', '-.']
+        ax.set_prop_cycle(
+            color=[colors[i % len(colors)] for i in range(num_curves)],
+            linestyle=[styles[(i // len(colors)) % len(styles)] for i in range(num_curves)],
+        )
+    return dict(loc='upper left', bbox_to_anchor=(1.02, 1), fontsize=10)
+
+
 def plot_final_loss_vs_lr(outputs, outfilename, val=False):
     """Plot final loss versus learning rate as lines for each method."""
     fig, ax = plt.subplots(figsize=(6, 4))
@@ -91,6 +107,7 @@ def plot_final_loss_vs_lr(outputs, outfilename, val=False):
         methods[name]['losses'].append(final_loss)
 
     # Plot each method as a line
+    legend_kwargs = set_colors_and_legend_style(ax, len(methods))
     lower_bound = 3.2
     upper_bound = 0.0
     for name, data in methods.items():
@@ -113,7 +130,7 @@ def plot_final_loss_vs_lr(outputs, outfilename, val=False):
     else:
         ax.set_ylabel('Final Loss')
         plotfile = 'figures/' + outfilename + '-lr-sens' + '.pdf'
-    ax.legend(loc='best', fontsize=10)
+    ax.legend(**legend_kwargs)
     ax.grid(axis='both', lw=0.2, ls='--', zorder=0)
     fig.subplots_adjust(top=0.95, bottom=0.15, left=0.15, right=0.95)
     fig.savefig(plotfile, format='pdf', bbox_inches='tight')
@@ -145,10 +162,11 @@ def plot_tuned_curves(outputs, outfilename, num_epochs, wallclock=False, val=Fal
     # Plot loss of tuned methods.
     tuned_outputs = [tuned_methods[name]['outputs'] for name in tuned_methods]
     lr_ranges = {name: [tuned_methods[name]['best_lr']] * 2 for name in tuned_methods}
+    legend_kwargs = set_colors_and_legend_style(ax, len(tuned_outputs))
     plot_data(ax, tuned_outputs, num_epochs, field, 'Loss', lr_ranges, get_alpha_from_lr, wallclock=wallclock)
     upper_bound = np.max([output[field][round(0.2 * len(output[field]))] for output in tuned_outputs])
     upper_bound = min(upper_bound, 10.0) if not np.isnan(upper_bound) else 10.0
-    ax.legend(loc='best', fontsize=10)
+    ax.legend(**legend_kwargs)
     ax.set_ylim(3.2, upper_bound)
     fig.subplots_adjust(top=0.99, bottom=0.155, left=0.12, right=0.99)
     suffix = "_tuned"
