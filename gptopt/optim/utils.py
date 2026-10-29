@@ -232,7 +232,7 @@ def get_optimizer(opt_config: dict, lr = 1e-3) -> Tuple[torch.optim.Optimizer, d
                   'betas': opt_config.get('betas', (0.95, 0.95)),
                   'eps': opt_config.get('eps', 1e-8),
                   'gamma': opt_config.get('gamma', 0.95),
-                  'ridge': opt_config.get('ridge', 1e-2),
+                  'ridge': opt_config.get('ridge', 1e-3),
                  }
 
     elif name == "angd":

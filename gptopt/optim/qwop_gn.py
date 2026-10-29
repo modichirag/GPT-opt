@@ -37,8 +37,6 @@ class QwopGN(torch.optim.Optimizer):
         assert isinstance(adam_params, list)
 
         self.ns_steps = ns_steps
-        self.gamma = gamma
-        self.ridge = ridge
 
         if polar_method == "polar_express":
             self.polar_fn = lambda g: PolarExpress(g, steps=ns_steps)
@@ -53,23 +51,40 @@ class QwopGN(torch.optim.Optimizer):
             lr=lr,
             wd=wd,
             betas=betas,
-            eps=eps
+            eps=eps,
+            gamma=gamma,
+            ridge=ridge,
         )
 
         # Register all parameters.
         params = list(muon_params) + list(adam_params)
         super().__init__(params, defaults)
 
-        # Assign a fixed layer index to each parameter. Adam parameters share the last index.
-        self.num_layers = len(muon_params) + 1
-        for i, p in enumerate(muon_params):
+        for p in muon_params:
             assert p.ndim >= 2
             self.state[p]["muon"] = True
-            self.state[p]["layer"] = i
 
         for p in adam_params:
             self.state[p]["muon"] = False
-            self.state[p]["layer"] = self.num_layers - 1
+
+    def assign_layers(self, params):
+        """
+        Assign a fixed layer index to each parameter with a gradient. Each Muon parameter gets its
+        own index, and all Adam parameters share the last index. Parameters without a gradient get
+        no index, and are assumed to never receive a gradient.
+        """
+        self.num_layers = 0
+        for p in params:
+            state = self.state[p]
+            state["layer"] = None
+            if state["muon"] and p.grad is not None:
+                state["layer"] = self.num_layers
+                self.num_layers += 1
+        for p in params:
+            state = self.state[p]
+            if not state["muon"] and p.grad is not None:
+                state["layer"] = self.num_layers
+        self.num_layers += 1 # adam parameters are treated as a single layer.
 
     def step(self, closure=None, loss=None):
         """Perform a single optimization step.
@@ -88,6 +103,12 @@ class QwopGN(torch.optim.Optimizer):
         wd = group["wd"]
         beta1, beta2 = group["betas"]
         eps = group["eps"]
+        gamma = group["gamma"]
+        ridge = group["ridge"]
+
+        # Assign layer indices on the first step, once we know which parameters have gradients.
+        if not hasattr(self, "num_layers"):
+            self.assign_layers(group["params"])
 
         # First pass over Muon parameters (update momentum, compute d and u).
         device = self.param_groups[0]["params"][0].device
@@ -103,16 +124,15 @@ class QwopGN(torch.optim.Optimizer):
             if "momentum_buffer" not in state:
                 state["momentum_buffer"] = g.clone()
             m = state["momentum_buffer"]
-            m.mul_(beta1).add_(g, alpha=1.0-beta1)
+            m.lerp_(g, 1.0 - beta1)
 
             # Compute polar factor, dual norm, and dot product of update with gradient.
-            lmo = self.polar_fn(m.view(m.shape[0], -1)).view(m.shape)
+            delta = self.polar_fn(m.view(m.shape[0], -1)).view(m.shape)
             j = state["layer"]
-            d[j] += (m * lmo).sum()
-            u[j] += (g * lmo).sum()
+            d[j] += (m * delta).sum()
+            u[j] += (g * delta).sum()
 
         # First pass over Adam parameters (update buffers, compute d and u).
-        lmo_scale_sq = torch.zeros((), device=device)
         for p in group["params"]:
             state = self.state[p]
             g = p.grad
@@ -129,53 +149,44 @@ class QwopGN(torch.optim.Optimizer):
             v.lerp_(g.square(), 1.0 - beta2)
 
             # Compute update, dual norm, and dot product of update with gradient.
-            lmo = m / (eps + v.sqrt())
+            delta = m / (eps + v.sqrt())
             j = state["layer"]
-            d[j] += (m * lmo).sum()
-            u[j] += (g * lmo).sum()
-            lmo_scale_sq += (m ** 2 / (eps + v.sqrt())).sum()
-
-        # Correct d and u terms for Adam parameters.
-        lmo_scale = lmo_scale_sq.sqrt()
-        d[-1] /= lmo_scale
-        u[-1] /= lmo_scale
+            d[j] += (m * delta).sum()
+            u[j] += (g * delta).sum()
 
         # Update running average of layerwise curvature matrix.
         state = self.state["global"]
         if "lr_precond" not in state:
             state["lr_precond"] = torch.diag(u * u)
         M = state["lr_precond"]
-        M.mul_(self.gamma).add_(torch.outer(u, u), alpha=1.0-self.gamma)
+        M.lerp_(torch.outer(u, u), 1.0-gamma)
 
         # Compute layer-wise learning rates.
-        eta = torch.linalg.solve(M + self.ridge * torch.eye(self.num_layers, device=device), d)
+        eta = torch.linalg.solve(M + ridge * torch.eye(self.num_layers, device=device), d)
 
         # Second pass over Muon parameters (apply update).
         for p in group["params"]:
             state = self.state[p]
-            g = p.grad
-            if not state["muon"] or g is None:
+            if not state["muon"] or p.grad is None:
                 continue
 
             # Compute update direction, apply update.
             m = state["momentum_buffer"]
-            lmo = self.polar_fn(m.view(m.shape[0], -1)).view(m.shape)
+            delta = self.polar_fn(m.view(m.shape[0], -1)).view(m.shape)
             p.data.mul_(1 - lr * wd)
-            p.data.add_(lmo, alpha=-lr*eta[state["layer"]])
+            p.data.add_(delta, alpha=-lr*eta[state["layer"]])
 
         # Second pass over Adam parameters (apply update).
         for p in group["params"]:
             state = self.state[p]
-            g = p.grad
-            if state["muon"] or g is None:
+            if state["muon"] or p.grad is None:
                 continue
 
             # Compute update direction, apply update.
             m = state["momentum_buffer"]
             v = state["sq_momentum_buffer"]
-            lmo = m / (eps + v.sqrt())
-            lmo /= lmo_scale
+            delta = m / (eps + v.sqrt())
             p.data.mul_(1 - lr * wd)
-            p.data.add_(lmo, alpha=-lr*eta[state["layer"]])
+            p.data.add_(delta, alpha=-lr*eta[state["layer"]])
 
         return loss
